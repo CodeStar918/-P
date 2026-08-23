@@ -63,7 +63,7 @@ async def generate(body: CustomBody, user_row=auth.CurrentUser):
 
     def _run() -> tuple[list[str], dict]:
         qs, meta = generate_interview_questions_with_meta(
-            job_title, jd, progress=lambda msg: prog_q.put(msg)
+            job_title, jd, progress=lambda msg: prog_q.put(msg), user_id=user_row["id"]
         )
         return qs, meta
 
@@ -108,7 +108,12 @@ async def generate(body: CustomBody, user_row=auth.CurrentUser):
         except (KeyError, IndexError, TypeError):
             persona = ""
         session = InterviewSession(
-            "mock", questions=qs, job_title=job_title, jd=jd, persona=persona
+            "mock",
+            questions=qs,
+            job_title=job_title,
+            jd=jd,
+            persona=persona,
+            user_id=user_row["id"],
         )
         session.display_history = [["assistant", greeting]]
         session_store.start_session(user_row["id"], session)

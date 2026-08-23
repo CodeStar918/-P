@@ -8,6 +8,7 @@
 - 支持流式输出（handle_stream）与同步输出（handle）。
 """
 
+import copy
 import json
 import logging
 import re
@@ -137,6 +138,7 @@ class InterviewSession:
         job_title: str = "",
         jd: str = "",
         persona: str = "",
+        user_id: int | None = None,
     ):
         self.mode = mode  # 'mock' | 'coach'
         self.stage_idx = 0  # 当前阶段下标（模拟）
@@ -153,6 +155,7 @@ class InterviewSession:
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.followup_count = 0  # 当前题已追问次数（深度感知追问）
         self.session_id: int | None = None  # 多用户持久化：对应 sessions 表行 id
+        self.user_id: int | None = user_id  # 多用户隔离：关联到具体用户
         # 干净的展示历史（前端渲染用，与 LLM 内部 messages 分离）：
         # 由调用方（REST/WS 层）维护，start 时放欢迎语，每回合追加用户原文与助手回复。
         self.display_history: list[list] = []
@@ -190,6 +193,7 @@ class InterviewSession:
             "started_at": self.started_at,
             "followup_count": self.followup_count,
             "display_history": self.display_history,
+            "user_id": self.user_id,
         }
 
     @classmethod
@@ -213,6 +217,7 @@ class InterviewSession:
         sess.started_at = data.get("started_at") or sess.started_at
         sess.followup_count = int(data.get("followup_count", 0))
         sess.display_history = data.get("display_history") or []
+        sess.user_id = data.get("user_id")
         return sess
 
     def history_for_display(self) -> list[tuple[str, str]]:
@@ -414,7 +419,7 @@ class InterviewSession:
             if self.current_q is None:
                 return (yield from self._ask_next_question_stream())
             prev_answers = len(self.answers)
-            prev_messages = self.messages[:]
+            prev_messages = copy.deepcopy(self.messages)
             prev_turn, prev_followup = self.turn, self.followup_count
             self.answers.append(
                 {
@@ -455,7 +460,7 @@ class InterviewSession:
 
         if self.turn == "followup":
             prev_followup = self.followup_count
-            prev_messages = self.messages[:]
+            prev_messages = copy.deepcopy(self.messages)
             self.messages.append({"role": "user", "content": f"（追问的回答）{user_text}"})
             if self.followup_count < MAX_FOLLOWUPS and _is_shallow_answer(user_text):
                 self.followup_count += 1
@@ -628,6 +633,7 @@ class InterviewSession:
                 source="定制" if self.custom_questions else "题库",
                 persona=self.persona,
                 started_at=self.started_at,
+                user_id=self.user_id,
             )
             db.add_session_answers(sid, self.answers)
             db.finish_session(sid, _report_score(report), report, _extract_weak_points(report))
@@ -636,7 +642,7 @@ class InterviewSession:
 
     def reset(self, mode: str) -> None:
         """重建会话状态（模式切换/中途切题时调用）。"""
-        self.__init__(mode, persona=self.persona)
+        self.__init__(mode, persona=self.persona, user_id=self.user_id)
 
     def ask_question_by_id(self, qid: int) -> str:
         """题库浏览→「出这道题」：直接以指定题目出题，开启一段新的模拟面试。"""

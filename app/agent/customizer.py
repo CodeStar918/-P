@@ -153,6 +153,7 @@ def generate_interview_questions_with_meta(
     jd: str,
     count: int = 8,
     progress: Callable[[str], None] | None = None,
+    user_id: int | None = None,
 ) -> tuple[list[str], dict]:
     """定制面试 Agent：提取技术栈 → 检索题库 →（零命中则懒加载补抓）→ 生成贴近岗位的题。
 
@@ -184,7 +185,7 @@ def generate_interview_questions_with_meta(
             if progress:
                 progress("已补抓真题，参考答案正在后台补全…")
             for src, ids in (lazy_info.get("source_ids") or {}).items():
-                lazy.enrich_answers_async(src, ids)
+                lazy.enrich_answers_async(src, ids, user_id)
         bank_hits = search_bank(tech)
     if progress:
         progress("正在生成面试题…")
@@ -238,10 +239,11 @@ def generate_interview_questions(
     jd: str,
     count: int = 8,
     progress: Callable[[str], None] | None = None,
+    user_id: int | None = None,
 ) -> list[str]:
     """兼容入口：只返回题目列表（旧调用方 / 语音链路保持不变）。
 
     文字版与语音版共用同一套决策：检索 → 零命中懒加载补抓 → 生成。
     """
-    questions, _ = generate_interview_questions_with_meta(job_title, jd, count, progress)
+    questions, _ = generate_interview_questions_with_meta(job_title, jd, count, progress, user_id)
     return questions
