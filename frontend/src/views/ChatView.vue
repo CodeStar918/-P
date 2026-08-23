@@ -93,7 +93,7 @@
           <WelcomeCards v-if="!chat.active && !chat.history.length" @action="onWelcomeAction" />
           <template v-for="(m, i) in chat.history" :key="i">
             <ChatBubble
-              v-if="!isReportBubble(m, i)"
+              v-if="!isReportBubble(m)"
               :role="m.role"
               :content="m.content"
               :streaming="m.streaming"
@@ -238,15 +238,9 @@ watch(
 )
 watch(() => chat.sending, (s) => s && scrollBottom())
 
-/** 面试结束后的最后一条消息是完整报告原文，已被 ReportPanel 替代展示，这里隐藏避免重复。 */
-function isReportBubble(m, i) {
-  return (
-    chat.finished &&
-    !!chat.report &&
-    i === chat.history.length - 1 &&
-    m.role === 'assistant' &&
-    !m.streaming
-  )
+/** 面试结束后的报告原文气泡（内容与 chat.report 一致的那条）已被 ReportPanel 替代展示，隐藏避免重复。 */
+function isReportBubble(m) {
+  return !!chat.report && m.role === 'assistant' && !m.streaming && m.content === chat.report
 }
 
 onMounted(async () => {
