@@ -161,7 +161,7 @@ def enrich_answers(source: str, source_ids: list[str]) -> dict:
     return adapter.fetch_details_for(source_ids)
 
 
-def enrich_answers_async(source: str, source_ids: list[str]) -> bool:
+def enrich_answers_async(source: str, source_ids: list[str], user_id: int | None = None) -> bool:
     """后台线程追答案：不阻塞出题/面试，答题期间答案异步补全。
 
     尽力而为：线程异常只记日志；即使进程结束未跑完，定时全量抓取仍会兜底补全。

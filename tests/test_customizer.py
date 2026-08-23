@@ -196,7 +196,7 @@ class CustomizerTests(unittest.TestCase):
             mock.patch("app.agent.customizer.lazy.enrich_answers_async") as m_enrich,
         ):
             qs, meta = customizer.generate_interview_questions_with_meta("前端开发", "Vue")
-        m_enrich.assert_called_once_with("mianshiya", ["123", "456"])
+        m_enrich.assert_called_once_with("mianshiya", ["123", "456"], None)
         self.assertTrue(meta["answer_backfill"])
         self.assertTrue(meta["lazy_fetched"])
         self.assertEqual(len(qs), 1)

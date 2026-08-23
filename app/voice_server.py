@@ -142,10 +142,9 @@ app.mount(
 
 def maybe_switch_to_mock(session: InterviewSession, text: str) -> InterviewSession:
     """首条消息说"开始面试/模拟面试"时，从答疑模式切换到模拟面试模式。"""
-    # 只匹配明确的"开始"意图，避免首条消息只是提问"模拟面试是什么"就误切换
     match = _MOCK_START_RE.search(text)
     if session.mode == "coach" and len(session.messages) <= 1 and match is not None:
-        return InterviewSession("mock", persona=session.persona)
+        return InterviewSession("mock", persona=session.persona, user_id=session.user_id)
     return session
 
 
@@ -510,6 +509,7 @@ async def voice(ws: WebSocket) -> None:
             job_title=custom.get("job_title", ""),
             jd=custom.get("jd", ""),
             persona=persona,
+            user_id=user_id,
         )
         greeting = _build_custom_greeting(custom)
     else:
@@ -518,7 +518,7 @@ async def voice(ws: WebSocket) -> None:
         if session is not None and not session.finished:
             greeting = REOPEN_GREETING
         else:
-            session = InterviewSession("coach", persona=persona)
+            session = InterviewSession("coach", persona=persona, user_id=user_id)
             greeting = prompts.VOICE_GREETING
     # 新建会话（语音发起的默认答疑 / 语音定制）落库，供文字版与后续语音共享
     if getattr(session, "session_id", None) is None:
