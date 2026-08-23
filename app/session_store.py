@@ -31,6 +31,7 @@ def load_active_session(user_id: int) -> InterviewSession | None:
     try:
         session = InterviewSession.from_dict(json.loads(row["state_json"]))
         session.session_id = row["id"]
+        session.user_id = user_id
         return session
     except Exception:
         logger.exception("恢复会话状态失败（session_id=%s），按新会话处理", row["id"])

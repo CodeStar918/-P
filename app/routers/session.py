@@ -74,9 +74,10 @@ def _new_session(body: StartBody, user_row) -> InterviewSession:
             job_title=body.job_title,
             jd=body.jd,
             persona=persona,
+            user_id=user_row["id"],
         )
     else:
-        session = InterviewSession("coach", persona=persona)
+        session = InterviewSession("coach", persona=persona, user_id=user_row["id"])
     greeting = _build_greeting(session, body.questions, body.job_title, body.jd)
     session.display_history = [["assistant", greeting]]
     return session
@@ -143,7 +144,7 @@ async def chat(body: ChatBody, user_row=auth.CurrentUser):
     """SSE 流式对话：推进当前会话（无会话时自动建辅导答疑）。"""
     session = session_store.load_active_session(user_row["id"])
     if session is None:
-        session = InterviewSession("coach")
+        session = InterviewSession("coach", user_id=user_row["id"])
         session.display_history = [["assistant", prompts.COACH_GREETING]]
         session_store.start_session(user_row["id"], session)
 
