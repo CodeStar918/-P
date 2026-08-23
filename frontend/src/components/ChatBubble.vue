@@ -32,18 +32,34 @@ const rendered = computed(() => renderMarkdown(props.content))
 .msg {
   display: flex;
   margin: 14px 0;
+  animation: msgIn 0.28s ease;
+}
+@keyframes msgIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg {
+    animation: none;
+  }
 }
 .msg.user {
   justify-content: flex-end;
 }
 .msg.user .bubble {
-  background: linear-gradient(135deg, #4f6ef7, #6482f8);
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
   color: #fff;
   padding: 10px 15px;
   border-radius: 16px 16px 5px 16px;
   font-size: 15px;
   line-height: 1.7;
-  box-shadow: 0 3px 10px rgba(79, 110, 247, 0.22);
+  box-shadow: 0 3px 10px rgba(var(--brand-rgb), 0.22);
   word-break: break-word;
   max-width: 82%;
   white-space: pre-wrap;
@@ -92,6 +108,10 @@ const rendered = computed(() => renderMarkdown(props.content))
   padding: 10px 12px;
   overflow-x: auto;
   font-size: 13px;
+}
+:deep(.md) pre code.hljs {
+  background: transparent;
+  padding: 0;
 }
 :deep(.md) code {
   font-family: ui-monospace, Consolas, Menlo, monospace;

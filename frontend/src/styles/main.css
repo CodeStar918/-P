@@ -1,4 +1,16 @@
 /* ===== 面试官小P · 全局样式（保留原 Streamlit / 语音页视觉）===== */
+:root {
+  --brand: var(--brand);
+  --brand-2: var(--brand-2);
+  --brand-light: #7a93ff;
+  --brand-rgb: 79, 110, 247;
+  --ink: #243352;
+  --ink-strong: #1e2c46;
+  --text: #56637a;
+  --muted: #7b879c;
+  --border: #e7ecf4;
+  --radius: 16px;
+}
 * {
   box-sizing: border-box;
 }
@@ -150,13 +162,13 @@ body {
   justify-content: flex-end;
 }
 .msg.user .bubble {
-  background: linear-gradient(135deg, #4f6ef7, #6482f8);
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
   color: #fff;
   padding: 10px 15px;
   border-radius: 16px 16px 5px 16px;
   font-size: 15px;
   line-height: 1.7;
-  box-shadow: 0 3px 10px rgba(79, 110, 247, 0.22);
+  box-shadow: 0 3px 10px rgba(var(--brand-rgb), 0.22);
   word-break: break-word;
   max-width: 82%;
   white-space: pre-wrap;
@@ -284,7 +296,7 @@ body {
 }
 .rev-score {
   font-weight: 700;
-  color: #4f6ef7;
+  color: var(--brand);
 }
 .rev-meta {
   color: #8a95aa;
@@ -450,7 +462,7 @@ body {
   display: block;
   height: 100%;
   width: 0;
-  background: linear-gradient(90deg, #4f6ef7, #2fbf71);
+  background: linear-gradient(90deg, var(--brand), #2fbf71);
   transition: width 0.06s linear;
 }
 .vmicTest {
@@ -540,10 +552,10 @@ body {
 }
 .vbubble.user {
   align-self: flex-end;
-  background: linear-gradient(135deg, #5b7cff, #4f6ef7);
+  background: linear-gradient(135deg, var(--brand-2), var(--brand));
   color: #fff;
   border-bottom-right-radius: 4px;
-  box-shadow: 0 4px 14px rgba(79, 110, 247, 0.28);
+  box-shadow: 0 4px 14px rgba(var(--brand-rgb), 0.28);
 }
 .vbubble.assistant {
   align-self: flex-start;

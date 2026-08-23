@@ -13,7 +13,8 @@
       </div>
       <div class="header-right">
         <el-button size="small" class="bank-btn" @click="bankVisible = true">
-          📚 题库
+          <el-icon><Collection /></el-icon>
+          题库
         </el-button>
         <el-dropdown trigger="click" @command="onCommand">
           <span class="user-chip">
@@ -44,7 +45,8 @@
           </el-col>
         </el-row>
         <el-button class="side-btn" size="small" @click="bankVisible = true">
-          📚 浏览题库 / 选题
+          <el-icon><Collection /></el-icon>
+          浏览题库 / 选题
         </el-button>
 
         <div class="side-title" style="margin-top: 18px">历史记录</div>
@@ -75,7 +77,8 @@
             type="primary"
             @click="backHome"
           >
-            🏠 返回首页
+            <el-icon><HomeFilled /></el-icon>
+            返回首页
           </el-button>
         </div>
 
@@ -102,6 +105,7 @@
           <ReportPanel
             v-if="chat.finished && chat.report"
             :report="chat.report"
+            :report-data="chat.reportData"
             @download="downloadReport"
           />
         </div>
@@ -130,7 +134,7 @@
     </div>
 
     <!-- 语音入口 -->
-    <a class="vc-float" title="打开语音通话" @click.prevent="goVoice">📞</a>
+    <a class="vc-float" title="打开语音通话" @click.prevent="goVoice"><el-icon><PhoneFilled /></el-icon></a>
 
     <!-- 对话框 -->
     <QuestionBankDialog v-model:visible="bankVisible" @start="startComprehensive" />
@@ -377,7 +381,7 @@ async function saveProfile() {
 }
 .user-chip:hover {
   border-color: #9db2e8;
-  color: #4f6ef7;
+  color: var(--brand);
 }
 .bank-btn {
   border-radius: 999px;
@@ -475,10 +479,10 @@ async function saveProfile() {
   width: 54px;
   height: 54px;
   border-radius: 50%;
-  background: #4f6ef7;
+  background: var(--brand);
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(79, 110, 247, 0.35);
+  box-shadow: 0 4px 18px rgba(var(--brand-rgb), 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -489,7 +493,7 @@ async function saveProfile() {
 }
 .vc-float:hover {
   transform: scale(1.08);
-  box-shadow: 0 6px 24px rgba(79, 110, 247, 0.5);
+  box-shadow: 0 6px 24px rgba(var(--brand-rgb), 0.5);
 }
 
 @media (max-width: 820px) {

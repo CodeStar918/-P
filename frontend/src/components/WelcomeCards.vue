@@ -7,7 +7,7 @@
     <el-row :gutter="14">
       <el-col v-for="card in cards" :key="card.title" :xs="24" :sm="8">
         <div class="qcard">
-          <div class="qicon">{{ card.icon }}</div>
+          <div class="qicon"><el-icon><component :is="card.icon" /></el-icon></div>
           <div class="qtitle">{{ card.title }}</div>
           <div class="qdesc">{{ card.desc }}</div>
           <el-button
@@ -28,9 +28,9 @@
 const emit = defineEmits(['action'])
 
 const cards = [
-  { key: 'mock', icon: '🎤', title: '模拟面试', desc: '难度递进 · 逐题点评', label: '开始面试' },
-  { key: 'coach', icon: '💡', title: '辅导答疑', desc: '标准回答 · 加分点 · 变式题', label: '开始答疑' },
-  { key: 'custom', icon: '🎯', title: '定制面试', desc: '按岗位与 JD 生成专属题', label: '开始定制' },
+  { key: 'mock', icon: 'Microphone', title: '模拟面试', desc: '难度递进 · 逐题点评', label: '开始面试' },
+  { key: 'coach', icon: 'Opportunity', title: '辅导答疑', desc: '标准回答 · 加分点 · 变式题', label: '开始答疑' },
+  { key: 'custom', icon: 'Aim', title: '定制面试', desc: '按岗位与 JD 生成专属题', label: '开始定制' },
 ]
 </script>
 
@@ -68,6 +68,7 @@ const cards = [
 .qicon {
   font-size: 26px;
   line-height: 1;
+  color: var(--brand);
 }
 .qtitle {
   margin-top: 6px;

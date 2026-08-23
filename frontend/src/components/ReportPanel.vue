@@ -11,8 +11,8 @@
         <svg viewBox="0 0 120 120" class="ring-svg">
           <defs>
             <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#4f6ef7" />
-              <stop offset="100%" stop-color="#7a93ff" />
+              <stop offset="0%" stop-color="var(--brand)" />
+              <stop offset="100%" stop-color="var(--brand-light)" />
             </linearGradient>
           </defs>
           <circle class="ring-bg" cx="60" cy="60" r="52" />
@@ -79,6 +79,7 @@ import { computed } from 'vue'
 
 const props = defineProps({
   report: { type: String, default: '' },
+  reportData: { type: Object, default: null },
 })
 defineEmits(['download'])
 
@@ -151,14 +152,30 @@ function parseReport(text) {
   }
 }
 
-const parsed = computed(() => parseReport(props.report))
+const parsed = computed(() => {
+  const d = props.reportData
+  // 后端已产出结构化数据时优先使用（避免前端重复解析 markdown）
+  if (d && (d.score != null || d.dimensions || d.weak_points || d.improvements)) {
+    return {
+      score: d.score,
+      dimensions: (d.dimensions || []).map((x) => ({
+        label: x.label,
+        score: clamp(parseInt(x.score, 10)),
+      })),
+      weakPoints: d.weak_points || [],
+      improvements: d.improvements || [],
+      strengths: [],
+    }
+  }
+  return parseReport(props.report)
+})
 const ringOffset = computed(() => {
   if (parsed.value.score == null) return 0
   return circumference * (1 - parsed.value.score / 100)
 })
 
 function dimColor(score) {
-  return score >= 60 ? 'linear-gradient(90deg, #4f6ef7, #7a93ff)' : 'linear-gradient(90deg, #f7a84f, #ffc26e)'
+  return score >= 60 ? 'linear-gradient(90deg, var(--brand), var(--brand-light))' : 'linear-gradient(90deg, #f7a84f, #ffc26e)'
 }
 </script>
 
@@ -169,7 +186,7 @@ function dimColor(score) {
   border-radius: 16px;
   padding: 18px 20px 14px;
   margin: 14px 0 4px;
-  box-shadow: 0 4px 20px rgba(79, 110, 247, 0.08);
+  box-shadow: 0 4px 20px rgba(var(--brand-rgb), 0.08);
 }
 .report-head {
   display: flex;
@@ -183,7 +200,7 @@ function dimColor(score) {
 }
 .report-kicker {
   font-size: 12px;
-  color: #4f6ef7;
+  color: var(--brand);
   letter-spacing: 1px;
   margin-bottom: 4px;
 }
@@ -255,7 +272,7 @@ function dimColor(score) {
   display: inline-block;
 }
 .dot-dim {
-  background: #4f6ef7;
+  background: var(--brand);
 }
 .dot-weak {
   background: #f7a84f;
