@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -12,7 +13,13 @@ from unittest import mock
 
 from app import auth, config, db
 from app.agent.coach import InterviewSession
-from app.voice_server import _cosyvoice_synthesize, _synthesize, app, maybe_switch_to_mock
+from app.voice_server import (
+    _cosyvoice_synthesize,
+    _synthesize,
+    app,
+    health,
+    maybe_switch_to_mock,
+)
 from fastapi.testclient import TestClient
 
 
@@ -606,6 +613,26 @@ class VoiceServerTests(unittest.TestCase):
             resp = client.get("/health")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), {"status": "ok"})
+
+    def test_health_returns_503_when_schema_missing(self):
+        """就绪探针：数据库文件存在但未初始化 schema 时应返回 503。"""
+        from fastapi import FastAPI
+
+        tmpdir = tempfile.TemporaryDirectory()
+        empty_db = Path(tmpdir.name) / "empty.db"
+        sqlite3.connect(empty_db).close()  # 仅创建空库文件，无任何表
+        probe = FastAPI()
+        probe.add_api_route("/health", health)
+        try:
+            with (
+                mock.patch.object(db, "get_conn", lambda: sqlite3.connect(empty_db)),
+                TestClient(probe) as client,
+            ):
+                resp = client.get("/health")
+            self.assertEqual(resp.status_code, 503)
+            self.assertEqual(resp.json()["detail"], "database schema missing")
+        finally:
+            tmpdir.cleanup()
 
     @mock.patch("app.agent.coach.db.fts_search", return_value=[])
     @mock.patch("app.agent.llm.chat_stream", return_value=iter(["标准", "答案"]))

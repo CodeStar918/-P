@@ -20,6 +20,9 @@ from app import config
 
 logger = logging.getLogger("interview_coach.db")
 
+#: 当前 schema 版本，与 _migrate 的最终 PRAGMA user_version 保持一致；变更 schema 时同步更新
+SCHEMA_VERSION = 7
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS questions (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,

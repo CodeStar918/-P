@@ -33,12 +33,12 @@ import json
 import logging
 import re
 import time
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager, closing, suppress
 from pathlib import Path
 
 import requests
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -150,6 +150,20 @@ def maybe_switch_to_mock(session: InterviewSession, text: str) -> InterviewSessi
 
 @app.get("/health")
 async def health() -> dict:
+    """就绪探针：验证数据库可连接、schema 已初始化且版本匹配，否则返回 503。"""
+    try:
+        with closing(db.get_conn()) as conn:
+            tables = {
+                row[0]
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            }
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+    except Exception:
+        raise HTTPException(status_code=503, detail="database unavailable") from None
+    if not {"users", "questions", "sessions"} <= tables:
+        raise HTTPException(status_code=503, detail="database schema missing")
+    if version != db.SCHEMA_VERSION:
+        raise HTTPException(status_code=503, detail="database schema outdated")
     return {"status": "ok"}
 
 

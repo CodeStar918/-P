@@ -1,10 +1,11 @@
 """账号认证 REST API：注册 / 登录 / 登出 / 当前用户 / 资料更新。"""
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 import app.db as db
 from app import auth
+from app.ratelimit import rate_limit
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -31,7 +32,7 @@ def _token_payload(user_row) -> dict:
 
 
 @router.post("/register")
-def register(body: RegisterBody) -> dict:
+def register(body: RegisterBody, _rate: None = Depends(rate_limit(limit=5, window=60))) -> dict:
     """注册并自动登录。"""
     username = body.username.strip()
     if not username:
@@ -47,7 +48,7 @@ def register(body: RegisterBody) -> dict:
 
 
 @router.post("/login")
-def login(body: LoginBody) -> dict:
+def login(body: LoginBody, _rate: None = Depends(rate_limit(limit=10, window=60))) -> dict:
     """登录，返回令牌与用户信息。"""
     user = db.get_user_by_username(body.username.strip())
     if user is None or not auth.verify_password(body.password, user["password_hash"]):

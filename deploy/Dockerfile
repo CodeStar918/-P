@@ -1,5 +1,5 @@
 # ---- 前端构建（Vue3 + Vite）----
-FROM node:20-alpine AS frontend
+FROM node:22-alpine AS frontend
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm ci --silent || npm install --silent
@@ -25,5 +25,8 @@ EXPOSE 8765
 
 # 运行时通过环境变量注入 DEEPSEEK_API_KEY（参考 .env.example）
 ENV DISABLE_SCHEDULER=0
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=4)"
 
 CMD ["uvicorn", "app.voice_server:app", "--host", "0.0.0.0", "--port", "8765"]
