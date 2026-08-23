@@ -150,12 +150,20 @@ def maybe_switch_to_mock(session: InterviewSession, text: str) -> InterviewSessi
 
 @app.get("/health")
 async def health() -> dict:
-    """就绪探针：Docker HEALTHCHECK 与负载均衡探测用，数据库不可用时返回 503。"""
+    """就绪探针：验证数据库可连接、schema 已初始化且版本匹配，否则返回 503。"""
     try:
         with closing(db.get_conn()) as conn:
-            conn.execute("SELECT 1").fetchone()
+            tables = {
+                row[0]
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            }
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
     except Exception:
         raise HTTPException(status_code=503, detail="database unavailable") from None
+    if not {"users", "questions", "sessions"} <= tables:
+        raise HTTPException(status_code=503, detail="database schema missing")
+    if version != db.SCHEMA_VERSION:
+        raise HTTPException(status_code=503, detail="database schema outdated")
     return {"status": "ok"}
 
 
