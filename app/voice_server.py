@@ -33,12 +33,12 @@ import json
 import logging
 import re
 import time
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager, closing, suppress
 from pathlib import Path
 
 import requests
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -151,6 +151,12 @@ def maybe_switch_to_mock(session: InterviewSession, text: str) -> InterviewSessi
 
 @app.get("/health")
 async def health() -> dict:
+    """就绪探针：Docker HEALTHCHECK 与负载均衡探测用，数据库不可用时返回 503。"""
+    try:
+        with closing(db.get_conn()) as conn:
+            conn.execute("SELECT 1").fetchone()
+    except Exception:
+        raise HTTPException(status_code=503, detail="database unavailable") from None
     return {"status": "ok"}
 
 

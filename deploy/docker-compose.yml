@@ -11,6 +11,7 @@ services:
       APP_HOST: 0.0.0.0
       APP_PORT: 8765
       DISABLE_SCHEDULER: "0"
+    restart: unless-stopped
     volumes:
       - interview-data:/app/data
 
