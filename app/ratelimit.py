@@ -17,7 +17,7 @@ _buckets: dict[str, deque[float]] = defaultdict(deque)
 def _prune(key: str, window: float) -> None:
     cutoff = time.monotonic() - window
     q = _buckets[key]
-    while q and q[0] < cutoff:
+    while q and q[0] <= cutoff:
         q.popleft()
 
 
