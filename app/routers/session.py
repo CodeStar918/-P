@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 import app.prompts as prompts
 import app.session_store as session_store
 from app import auth
-from app.agent.coach import InterviewSession
+from app.agent.coach import InterviewSession, parse_report
 
 logger = logging.getLogger("interview_coach.api.session")
 
@@ -120,6 +120,7 @@ def get_session(user_row=auth.CurrentUser) -> dict:
         "history": session.history_for_display(),
         "finished": session.finished,
         "report": report,
+        "report_data": parse_report(report) if report else None,
         "persona": session.persona,
         "custom_questions": session.custom_questions,
         "job_title": session.job_title,
@@ -187,6 +188,7 @@ async def chat(body: ChatBody, user_row=auth.CurrentUser):
                     "mode": session.mode,
                     "history": session.history_for_display(),
                     "report": report,
+                    "report_data": parse_report(report) if report else None,
                 }
             )
         except Exception as e:  # noqa: BLE001 - 流式里兜底所有异常并告知前端

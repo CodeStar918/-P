@@ -80,6 +80,51 @@ def _extract_weak_points(report: str) -> str | None:
     return "\n".join(out) if out else None
 
 
+def _extract_section_items(report: str, section_key: str) -> list[str]:
+    """抽取报告中某个小节的清单行（标题含 section_key，条目以 - / • / 数字开头）。"""
+    out: list[str] = []
+    active = False
+    for raw in (report or "").splitlines():
+        line = raw.strip()
+        if section_key in line:
+            active = True
+            continue
+        if not active:
+            continue
+        if line.startswith(("-", "•")) or re.match(r"^\d+[.、]", line):
+            out.append(re.sub(r"^[-•\d.、\s]+", "", line).strip())
+        elif line:
+            break
+    return out
+
+
+def _extract_dimensions(report: str) -> list[dict]:
+    """抽取维度分：形如 `- 技术正确性：40` 或 `- 技术正确性 40`，返回 [{"label","score"}]。"""
+    dims: list[dict] = []
+    for raw in (report or "").splitlines():
+        line = raw.strip()
+        m = re.match(r"^[-•]\s*(.+?)[:：]\s*(\d{1,3})\s*$", line)
+        if not m:
+            m = re.match(r"^[-•]\s*(.+?)\s+(\d{1,3})\s*$", line)
+        if not m:
+            continue
+        label = m.group(1).strip()
+        if "总分" in label:
+            continue
+        dims.append({"label": label, "score": min(int(m.group(2)), 100)})
+    return dims
+
+
+def parse_report(report: str) -> dict:
+    """把总结报告 markdown 解析为结构化数据，供前端报告面板直接渲染。"""
+    return {
+        "score": _report_score(report),
+        "dimensions": _extract_dimensions(report),
+        "weak_points": _extract_section_items(report, "薄弱点"),
+        "improvements": _extract_section_items(report, "改进"),
+    }
+
+
 def _sanitize_input(text: str) -> str:
     """去首尾空白 + 截断超长输入。"""
     return (text or "").strip()[:MAX_INPUT_CHARS]
