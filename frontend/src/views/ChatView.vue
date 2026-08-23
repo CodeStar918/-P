@@ -91,16 +91,19 @@
 
         <div ref="scrollRef" class="chat-scroll">
           <WelcomeCards v-if="!chat.active && !chat.history.length" @action="onWelcomeAction" />
-          <ChatBubble
-            v-for="(m, i) in chat.history"
-            :key="i"
-            :role="m.role"
-            :content="m.content"
-            :streaming="m.streaming"
+          <template v-for="(m, i) in chat.history" :key="i">
+            <ChatBubble
+              v-if="!isReportBubble(m, i)"
+              :role="m.role"
+              :content="m.content"
+              :streaming="m.streaming"
+            />
+          </template>
+          <ReportPanel
+            v-if="chat.finished && chat.report"
+            :report="chat.report"
+            @download="downloadReport"
           />
-          <div v-if="chat.finished && chat.report" class="report-actions">
-            <el-button type="primary" @click="downloadReport">下载总结报告 (.md)</el-button>
-          </div>
         </div>
 
         <div class="chat-input-bar">
@@ -170,6 +173,7 @@ import WelcomeCards from '../components/WelcomeCards.vue'
 import ChatBubble from '../components/ChatBubble.vue'
 import QuestionBankDialog from '../components/QuestionBankDialog.vue'
 import CustomInterviewDialog from '../components/CustomInterviewDialog.vue'
+import ReportPanel from '../components/ReportPanel.vue'
 
 const auth = useAuthStore()
 const chat = useChatStore()
@@ -233,6 +237,17 @@ watch(
   () => scrollBottom(),
 )
 watch(() => chat.sending, (s) => s && scrollBottom())
+
+/** 面试结束后的最后一条消息是完整报告原文，已被 ReportPanel 替代展示，这里隐藏避免重复。 */
+function isReportBubble(m, i) {
+  return (
+    chat.finished &&
+    !!chat.report &&
+    i === chat.history.length - 1 &&
+    m.role === 'assistant' &&
+    !m.streaming
+  )
+}
 
 onMounted(async () => {
   await chat.load()
@@ -441,10 +456,6 @@ async function saveProfile() {
   overflow-y: auto;
   min-height: 0;
   padding: 4px 4px 8px;
-}
-.report-actions {
-  text-align: center;
-  margin: 14px 0;
 }
 .chat-input-bar {
   display: flex;
