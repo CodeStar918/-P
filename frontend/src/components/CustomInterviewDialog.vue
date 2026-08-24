@@ -103,7 +103,7 @@ async function generate() {
   width: 14px;
   height: 14px;
   border: 2px solid #cdd9f7;
-  border-top-color: #4f6ef7;
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: rot 0.8s linear infinite;
 }
