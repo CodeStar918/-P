@@ -1,7 +1,7 @@
 /* ===== 面试官小P · 全局样式（保留原 Streamlit / 语音页视觉）===== */
 :root {
-  --brand: var(--brand);
-  --brand-2: var(--brand-2);
+  --brand: #4f6ef7;
+  --brand-2: #6482f8;
   --brand-light: #7a93ff;
   --brand-rgb: 79, 110, 247;
   --ink: #243352;

@@ -99,10 +99,18 @@ def _extract_section_items(report: str, section_key: str) -> list[str]:
 
 
 def _extract_dimensions(report: str) -> list[dict]:
-    """抽取维度分：形如 `- 技术正确性：40` 或 `- 技术正确性 40`，返回 [{"label","score"}]。"""
+    """抽取维度分：仅匹配【总分】之后、薄弱点/改进等章节之前的
+    `- 技术正确性：40` 或 `- 技术正确性 40`，返回 [{"label","score"}]。"""
     dims: list[dict] = []
+    started = False
     for raw in (report or "").splitlines():
         line = raw.strip()
+        if not started:
+            if "总分" in line:
+                started = True
+            continue
+        if any(k in line for k in ("薄弱点", "改进", "建议")):
+            break
         m = re.match(r"^[-•]\s*(.+?)[:：]\s*(\d{1,3})\s*$", line)
         if not m:
             m = re.match(r"^[-•]\s*(.+?)\s+(\d{1,3})\s*$", line)
