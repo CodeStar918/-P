@@ -314,7 +314,7 @@ async function submitImport() {
 }
 .qrow.selected {
   background: #eef2ff;
-  border-left: 3px solid #4f6ef7;
+  border-left: 3px solid var(--brand);
 }
 .qinfo {
   min-width: 0;

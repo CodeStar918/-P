@@ -65,3 +65,31 @@ python -m app.crawler.run
 - 登录令牌经 `Authorization: Bearer <token>`（REST）与 `?token=`（WebSocket）传递；
   新增受保护接口用 `auth.CurrentUser` 依赖解析当前用户。
 
+## 工程纪律
+
+### 设计令牌单一事实来源
+
+- 品牌色只定义在 `frontend/src/styles/main.css` 的 `:root` 中，必须是具体值，
+  禁止自引用（`--x: var(--x)`）或引用其他令牌拼出间接循环。
+- 组件/页面一律引用 `var(--brand)`、`var(--brand-2)`、`var(--brand-light)`、
+  `var(--brand-rgb)`，不得写死品牌色值；新增品牌色先加令牌，再引用。
+- `tests/test_css_discipline.py` 自动守卫上述规则，改样式后必须保持通过。
+
+### 解析与身份判断
+
+- 文本/报告解析只放后端 `app/agent/coach.py`，必须限定章节作用域
+  （如维度分只在【总分】之后、薄弱点/改进之前抽取），并配离线单测；
+  前端不得复制一份解析正则。
+- 前端历史/列表元素禁止用内容相等判断身份；隐藏、去重、替换必须针对
+  唯一条目（索引或显式标记）。
+
+### 提交纪律
+
+- 一个需求一个提交，commit message 用 `type(scope): 中文描述`。
+- 禁止把同一改动重复提交为多个 SHA；同一 PR 保持线性历史。
+- 推送前先 `git fetch` 对比，历史分叉用 rebase 而不是 merge。
+
+### 测试纪律
+
+- `python -m pytest` 必须全量离线通过才能提交（LLM、网络、edge-tts 全 mock）。
+- 改动解析器、状态机、数据库迁移时必须同步新增/更新单测。
