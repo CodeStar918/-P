@@ -1,8 +1,8 @@
 <template>
   <div class="vphone">
     <div class="vtop">
-      <span class="back" @click="goBack">← 文字版</span>
-      <div class="title">🎤 面试官小P</div>
+      <span class="back" @click="goBack"><el-icon><Back /></el-icon>文字版</span>
+      <div class="title"><el-icon><Microphone /></el-icon>面试官小P</div>
       <div class="vmode">{{ ui.mode }}</div>
     </div>
 
@@ -43,7 +43,8 @@
 
   <div class="vfooter">
     <button id="callBtn" :class="{ on: ui.active }" :title="ui.active ? '挂断' : '接通'" @click="toggle">
-      {{ ui.active ? '⏹' : '📞' }}<span class="lbl">{{ ui.active ? '挂断' : '接通' }}</span>
+      <el-icon><component :is="ui.active ? 'Close' : 'PhoneFilled'" /></el-icon>
+      <span class="lbl">{{ ui.active ? '挂断' : '接通' }}</span>
     </button>
   </div>
 

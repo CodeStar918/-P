@@ -13,7 +13,8 @@
       </div>
       <div class="header-right">
         <el-button size="small" class="bank-btn" @click="bankVisible = true">
-          📚 题库
+          <el-icon><Collection /></el-icon>
+          题库
         </el-button>
         <el-dropdown trigger="click" @command="onCommand">
           <span class="user-chip">
@@ -44,7 +45,8 @@
           </el-col>
         </el-row>
         <el-button class="side-btn" size="small" @click="bankVisible = true">
-          📚 浏览题库 / 选题
+          <el-icon><Collection /></el-icon>
+          浏览题库 / 选题
         </el-button>
 
         <div class="side-title" style="margin-top: 18px">历史记录</div>
@@ -75,7 +77,8 @@
             type="primary"
             @click="backHome"
           >
-            🏠 返回首页
+            <el-icon><HomeFilled /></el-icon>
+            返回首页
           </el-button>
         </div>
 
@@ -91,16 +94,20 @@
 
         <div ref="scrollRef" class="chat-scroll">
           <WelcomeCards v-if="!chat.active && !chat.history.length" @action="onWelcomeAction" />
-          <ChatBubble
-            v-for="(m, i) in chat.history"
-            :key="i"
-            :role="m.role"
-            :content="m.content"
-            :streaming="m.streaming"
+          <template v-for="(m, i) in chat.history" :key="i">
+            <ChatBubble
+              v-if="!isReportBubble(m, i)"
+              :role="m.role"
+              :content="m.content"
+              :streaming="m.streaming"
+            />
+          </template>
+          <ReportPanel
+            v-if="chat.finished && chat.report"
+            :report="chat.report"
+            :report-data="chat.reportData"
+            @download="downloadReport"
           />
-          <div v-if="chat.finished && chat.report" class="report-actions">
-            <el-button type="primary" @click="downloadReport">下载总结报告 (.md)</el-button>
-          </div>
         </div>
 
         <div class="chat-input-bar">
@@ -127,7 +134,7 @@
     </div>
 
     <!-- 语音入口 -->
-    <a class="vc-float" title="打开语音通话" @click.prevent="goVoice">📞</a>
+    <a class="vc-float" title="打开语音通话" @click.prevent="goVoice"><el-icon><PhoneFilled /></el-icon></a>
 
     <!-- 对话框 -->
     <QuestionBankDialog v-model:visible="bankVisible" @start="startComprehensive" />
@@ -170,6 +177,7 @@ import WelcomeCards from '../components/WelcomeCards.vue'
 import ChatBubble from '../components/ChatBubble.vue'
 import QuestionBankDialog from '../components/QuestionBankDialog.vue'
 import CustomInterviewDialog from '../components/CustomInterviewDialog.vue'
+import ReportPanel from '../components/ReportPanel.vue'
 
 const auth = useAuthStore()
 const chat = useChatStore()
@@ -233,6 +241,21 @@ watch(
   () => scrollBottom(),
 )
 watch(() => chat.sending, (s) => s && scrollBottom())
+
+/** 仅隐藏真正的报告消息（历史中最后一条内容与 chat.report 一致的助手消息），
+ *  避免误藏同内容的早期回答；报告气泡由 ReportPanel 替代展示。 */
+const reportIndex = computed(() => {
+  if (!chat.finished || !chat.report) return -1
+  for (let i = chat.history.length - 1; i >= 0; i--) {
+    const m = chat.history[i]
+    if (m.role === 'assistant' && !m.streaming && m.content === chat.report) return i
+  }
+  return -1
+})
+
+function isReportBubble(m, i) {
+  return i === reportIndex.value
+}
 
 onMounted(async () => {
   await chat.load()
@@ -368,7 +391,7 @@ async function saveProfile() {
 }
 .user-chip:hover {
   border-color: #9db2e8;
-  color: #4f6ef7;
+  color: var(--brand);
 }
 .bank-btn {
   border-radius: 999px;
@@ -442,10 +465,6 @@ async function saveProfile() {
   min-height: 0;
   padding: 4px 4px 8px;
 }
-.report-actions {
-  text-align: center;
-  margin: 14px 0;
-}
 .chat-input-bar {
   display: flex;
   gap: 10px;
@@ -470,10 +489,10 @@ async function saveProfile() {
   width: 54px;
   height: 54px;
   border-radius: 50%;
-  background: #4f6ef7;
+  background: var(--brand);
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(79, 110, 247, 0.35);
+  box-shadow: 0 4px 18px rgba(var(--brand-rgb), 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -484,7 +503,7 @@ async function saveProfile() {
 }
 .vc-float:hover {
   transform: scale(1.08);
-  box-shadow: 0 6px 24px rgba(79, 110, 247, 0.5);
+  box-shadow: 0 6px 24px rgba(var(--brand-rgb), 0.5);
 }
 
 @media (max-width: 820px) {

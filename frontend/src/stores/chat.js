@@ -9,6 +9,7 @@ export const useChatStore = defineStore('chat', {
     history: [], // [{role:'assistant'|'user', content, streaming}]
     finished: false,
     report: null,
+    reportData: null,
     persona: '',
     sending: false,
     voiceReady: false,
@@ -28,6 +29,7 @@ export const useChatStore = defineStore('chat', {
       this.mode = s.mode
       this.finished = s.finished
       this.report = s.report
+      this.reportData = s.report_data || null
       this.persona = s.persona || ''
       this._setHistory(s.history)
     },
@@ -37,6 +39,7 @@ export const useChatStore = defineStore('chat', {
       this.mode = r.mode
       this.finished = false
       this.report = null
+      this.reportData = null
       this._setHistory(r.history)
     },
     async reset() {
@@ -60,7 +63,10 @@ export const useChatStore = defineStore('chat', {
             this.sending = false
             this.finished = !!ev.finished
             this.mode = ev.mode
-            if (ev.finished) this.report = ev.report
+            if (ev.finished) {
+              this.report = ev.report
+              this.reportData = ev.report_data || null
+            }
             resolve(ev)
           },
           onError: (msg) => {
@@ -83,6 +89,7 @@ export const useChatStore = defineStore('chat', {
           this.mode = ev.mode
           this.finished = false
           this.report = null
+          this.reportData = null
           this._setHistory(ev.history)
           this.voiceReady = !!ev.custom_voice_ready
           this.customJobTitle = ev.job_title || ''

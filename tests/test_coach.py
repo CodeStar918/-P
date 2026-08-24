@@ -20,6 +20,26 @@ FAKE_QUESTION = {
 LONG_ANSWER = "（我的详细回答）" * 30  # 超过 SHALLOW_MIN_CHARS，且不含模糊词
 
 
+def test_parse_report_dimensions_scoped_to_score_section():
+    """薄弱点/改进清单里以数字结尾的条目不能被误判成维度分。"""
+    report = (
+        "【总分】78/100\n"
+        "- 技术正确性：32\n"
+        "- 表达清晰度 24\n"
+        "知识薄弱点：\n"
+        "- 熟悉 Python 3\n"
+        "改进建议：\n"
+        "- 阅读 Flask 源码 2 遍\n"
+    )
+    data = coach.parse_report(report)
+    assert data["dimensions"] == [
+        {"label": "技术正确性", "score": 32},
+        {"label": "表达清晰度", "score": 24},
+    ]
+    assert data["weak_points"] == ["熟悉 Python 3"]
+    assert data["improvements"] == ["阅读 Flask 源码 2 遍"]
+
+
 class CoachFlowTests(unittest.TestCase):
     def setUp(self):
         """把数据库指向临时文件，避免测试把面试记录写进真实题库。"""
