@@ -832,9 +832,7 @@ class VoiceServerTests(unittest.TestCase):
                     )
                     _recv_until_done(ws)
                 # 第 3 条：超限 → 结构化错误，不再触发 LLM
-                ws.send_text(
-                    json.dumps({"type": "text", "content": "问题"}, ensure_ascii=False)
-                )
+                ws.send_text(json.dumps({"type": "text", "content": "问题"}, ensure_ascii=False))
                 err = None
                 while True:
                     m = json.loads(ws.receive_text())
@@ -881,9 +879,7 @@ class VoiceServerTests(unittest.TestCase):
         ):
             try:
                 _recv_until_done(ws)  # 消化开场白
-                ws.send_text(
-                    json.dumps({"type": "text", "content": "你好"}, ensure_ascii=False)
-                )
+                ws.send_text(json.dumps({"type": "text", "content": "你好"}, ensure_ascii=False))
                 # 收到第一条 delta（生成已开始）后发 stop
                 while json.loads(ws.receive_text())["type"] != "delta":
                     pass
@@ -943,9 +939,7 @@ class VoiceServerTests(unittest.TestCase):
                 elif m["type"] == "done":
                     break
         self.assertEqual(len(pushed), 4)
-        self.assertEqual(
-            pushed, synth_order, "推送顺序必须与文本顺序一致（sid 顺序即内容顺序）"
-        )
+        self.assertEqual(pushed, synth_order, "推送顺序必须与文本顺序一致（sid 顺序即内容顺序）")
 
 
 if __name__ == "__main__":
