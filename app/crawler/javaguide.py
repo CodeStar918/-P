@@ -94,6 +94,10 @@ class JavaGuideAdapter(SourceAdapter):
         """抓单个专题页：解析 h3 问题 + 到下一个标题之间的兄弟节点作为答案。"""
         resp = self._session.get(url, headers=HEADERS, timeout=40)
         resp.raise_for_status()
+        # 源站响应头不含 charset，requests 会按 HTTP 默认 ISO-8859-1 解码，
+        # 导致中文全部变成 mojibake 入库（历史 BUG：题库 88% 题目乱码）。
+        # javaguide.cn 全站为 UTF-8，显式指定后再取 resp.text。
+        resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")
         main = soup.select_one("main.vp-page") or soup.select_one("article") or soup
         rows: list[dict] = []

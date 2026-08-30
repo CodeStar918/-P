@@ -23,15 +23,20 @@ logger = logging.getLogger("interview_coach.llm")
 
 _client: OpenAI | None = None
 
-#: 可重试的异常集合（网络层错误 + OpenAI 5xx/429/超时）
-_RETRYABLE = (
-    RateLimitError,
-    APITimeoutError,
-    APIConnectionError,
-    APIStatusError,
-    ConnectionError,
-    TimeoutError,
-)
+
+def _is_retryable(e: Exception) -> bool:
+    """仅对瞬时错误重试；4xx 客户端错误（key 失效/参数错/超限）重试也无济于事，
+    只会白等退避时间（bug #18：400/401 被误重试 3 次，累计 ~15s）。
+
+    可重试：限流 429、超时、连接错误、服务端 5xx。
+    """
+    if isinstance(
+        e, (RateLimitError, APITimeoutError, APIConnectionError, ConnectionError, TimeoutError)
+    ):
+        return True
+    if isinstance(e, APIStatusError):
+        return 500 <= getattr(e, "status_code", 0) < 600
+    return False
 
 
 def is_api_key_configured() -> bool:
@@ -106,7 +111,9 @@ def chat(
                 usage,
             )
             return text
-        except _RETRYABLE as e:
+        except Exception as e:
+            if not _is_retryable(e):
+                raise
             last_err = e
             wait = _retry_wait(attempt)
             logger.warning(
@@ -147,7 +154,9 @@ def chat_stream(
                     started = True
                     yield delta
             return
-        except _RETRYABLE as e:
+        except Exception as e:
+            if not _is_retryable(e):
+                raise
             last_err = e
             if started:
                 raise
