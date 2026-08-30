@@ -17,6 +17,7 @@ from unittest import mock
 
 from app import config, db
 from app.agent import llm
+from app.agent.coach import InterviewSession
 from app.crawler.fix_mojibake import repair_text
 from app.ratelimit import reset_rate_limits
 from app.voice_server import app
@@ -186,6 +187,120 @@ class TagsContractTests(unittest.TestCase):
 def _mojibake(text: str) -> str:
     """按真实故障路径构造乱码样本：UTF-8 字节被按 latin-1 误解码。"""
     return text.encode("utf-8").decode("latin-1")
+
+
+_REPORT_TEXT = "【总分】80/100\n## 知识薄弱点\n- 索引原理\n## 改进建议\n- 多刷题"
+
+
+class ReportPersistenceTests(unittest.TestCase):
+    """bug #3：报告落库复用活跃会话行，历史列表不再每场面试重复两条。"""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._patch = mock.patch.object(config, "DB_PATH", Path(self._tmpdir.name) / "report.db")
+        self._patch.start()
+        db.init_db()
+
+    def tearDown(self):
+        self._patch.stop()
+        self._tmpdir.cleanup()
+
+    def _make_finished_session(self, uid: int) -> InterviewSession:
+        s = InterviewSession("mock", user_id=uid)
+        s.turn = "report"
+        s.finished = True
+        s.answers = [{"stage": "自我介绍", "title": "Q1", "answer": "A1"}]
+        s.messages = [{"role": "assistant", "content": _REPORT_TEXT}]
+        return s
+
+    def test_report_single_row(self):
+        import app.session_store as session_store
+
+        uid = 424242
+        s = self._make_finished_session(uid)
+        session_store.start_session(uid, s)
+        # 模拟语音侧完成回调链：_persist_report（报告落库）+ save_session（状态落库）
+        s._persist_report(s.messages[-1]["content"])
+        session_store.save_session(uid, s)
+        rows = db.list_sessions_by_user(uid, limit=10)
+        self.assertEqual(len(rows), 1, "报告只应落在活跃会话行，不得新建第二条")
+        row = rows[0]
+        self.assertEqual(row["status"], "done", "完成的会话应归档为 done")
+        self.assertIn("80", str(row["score"]))
+        self.assertIn("总分", row["report"])
+        answers = db.get_session_answers(row["id"])
+        self.assertEqual(len(answers), 1, "问答记录应落在同一行下")
+        self.assertEqual(answers[0]["question_title"], "Q1")
+
+
+class ReportStreamRollbackTests(unittest.TestCase):
+    """bug #4：报告/出题流 LLM 失败 → 状态回滚；barge-in（CancelledError）不回滚。"""
+
+    def setUp(self):
+        self.s = InterviewSession("mock")
+        self.s.turn = "followup"
+        self.s.finished = False
+        self.s.answers = [{"stage": "基础", "title": "Q1", "answer": "A1"}]
+        self.s.messages = [{"role": "assistant", "content": "上一轮回复"}]
+        self.n_before = len(self.s.messages)
+
+    def test_report_stream_failure_rolls_back(self):
+        with (
+            mock.patch.object(self.s, "_chat_stream", side_effect=RuntimeError("llm down")),
+            self.assertRaises(RuntimeError),
+        ):
+            list(self.s._finish_report_stream())
+        self.assertFalse(self.s.finished, "报告流失败后 finished 必须回滚")
+        self.assertEqual(self.s.turn, "followup")
+        self.assertEqual(len(self.s.messages), self.n_before, "空 assistant 占位应被回滚")
+
+    def test_report_stream_success_persists(self):
+        def ok_stream(*args, **kwargs):
+            yield "【总分】80/100"
+
+        with (
+            mock.patch.object(self.s, "_chat_stream", side_effect=ok_stream),
+            mock.patch.object(self.s, "_persist_report") as spy,
+        ):
+            outs = list(self.s._finish_report_stream())
+        self.assertEqual("".join(outs), "【总分】80/100")
+        self.assertTrue(self.s.finished)
+        spy.assert_called_once_with("【总分】80/100")
+
+    def test_barge_in_keeps_state(self):
+        """barge-in（CancelledError）走 BaseException 分支：状态保留，不打断重出报告语义。"""
+        import asyncio
+
+        def half_then_cancel(*args, **kwargs):
+            yield "报告前半"
+            raise asyncio.CancelledError()
+
+        with (
+            mock.patch.object(self.s, "_chat_stream", side_effect=half_then_cancel),
+            self.assertRaises(asyncio.CancelledError),
+        ):
+            list(self.s._finish_report_stream())
+        self.assertTrue(self.s.finished, "barge-in 不应回滚报告状态")
+        self.assertEqual(self.s.turn, "report")
+
+    def test_ask_question_failure_rolls_back(self):
+        """出题流失败：asked_ids/current_q/messages 回滚，题目不被静默消费。"""
+        s = self.s
+        s.turn = "answering"
+        s.current_q = {"id": 7, "title": "上一题", "difficulty": "中"}
+        n_before = len(s.messages)
+        with (
+            mock.patch(
+                "app.agent.coach._pick_question",
+                return_value={"id": 9, "title": "新题", "difficulty": "中"},
+            ),
+            mock.patch.object(s, "_chat_stream", side_effect=RuntimeError("llm down")),
+            self.assertRaises(RuntimeError),
+        ):
+            list(s._ask_next_question_stream())
+        self.assertNotIn(9, s.asked_ids, "出题失败后新题不应被标记已问")
+        self.assertEqual(s.current_q["id"], 7)
+        self.assertEqual(len(s.messages), n_before)
 
 
 class RepairTextTests(unittest.TestCase):

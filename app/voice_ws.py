@@ -241,6 +241,11 @@ class VoiceConnection:
         task = asyncio.create_task(_produce(self.ws, session, text))
 
         def _on_produce_done(t, s=session):
+            # 被打断（barge-in）或生成异常的任务不落库：前者的半截回复由下一轮
+            # 正常完成的任务一并持久化；后者生成器已回滚，保留上一轮已存状态，
+            # 避免"finished=True + 空 assistant 消息"的损坏状态出库（bug #4）
+            if t.cancelled() or t.exception() is not None:
+                return
             # 定制面试结束（输出总结报告）后清除待执行状态，避免下次接通重复同一套题
             _clear_custom_when_finished(self.user_id, s)
             # 每次回复完成即持久化会话状态（断线/刷新可恢复）
