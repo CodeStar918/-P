@@ -15,9 +15,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from app import config, db
+from app import auth, config, db
 from app.agent import llm
-from app.agent.coach import InterviewSession
+from app.agent.coach import (
+    InterviewSession,
+    _extract_dimensions,
+    _extract_weak_points,
+)
 from app.crawler.fix_mojibake import repair_text
 from app.ratelimit import reset_rate_limits
 from app.voice_server import app
@@ -34,6 +38,183 @@ def _api_error(status: int) -> APIStatusError:
     """构造带 status_code 的 APIStatusError（openai SDK 签名）。"""
     resp = SimpleNamespace(status_code=status, headers={}, request=SimpleNamespace())
     return APIStatusError(f"http {status}", response=resp, body=None)
+
+
+class TokenCleanupTests(unittest.TestCase):
+    """bug #9：签发令牌时惰性清理过期行，auth_tokens 不再只增不减。"""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._patch = mock.patch.object(config, "DB_PATH", Path(self._tmpdir.name) / "token.db")
+        self._patch.start()
+        db.init_db()
+
+    def tearDown(self):
+        self._patch.stop()
+        self._tmpdir.cleanup()
+
+    def test_expired_rows_purged_on_issue(self):
+        from datetime import datetime, timedelta, timezone
+
+        uid = db.create_user("tcu", auth.hash_password("pass123456"))
+        past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        db.create_auth_token(uid, "expired-tok", past)
+        db.create_auth_token(uid, "live-tok", future)
+        # 再签发一次：应顺带清理 expired-tok，保留 live-tok
+        db.create_auth_token(uid, "new-tok", future)
+        conn = db.get_conn()
+        try:
+            tokens = {
+                r["token"]
+                for r in conn.execute("SELECT token FROM auth_tokens WHERE user_id=?", (uid,))
+            }
+        finally:
+            conn.close()
+        self.assertNotIn("expired-tok", tokens)
+        self.assertEqual(tokens, {"live-tok", "new-tok"})
+
+
+class ChatRateLimitAndLockTests(unittest.TestCase):
+    """bug #10（chat 限流）/#21（并发锁拒绝第二流）/#13（错误不回显）。"""
+
+    def setUp(self):
+        _isolate_rate_limit()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._patch = mock.patch.object(config, "DB_PATH", Path(self._tmpdir.name) / "chat.db")
+        self._patch.start()
+        db.init_db()
+        self.client = TestClient(app)
+        r = self.client.post(
+            "/api/auth/register", json={"username": "chatuser", "password": "pass123456"}
+        )
+        self.hdr = {"Authorization": f"Bearer {r.json()['token']}"}
+
+    def tearDown(self):
+        self._patch.stop()
+        _isolate_rate_limit()
+        self._tmpdir.cleanup()
+
+    def test_chat_rate_limited(self):
+        with (
+            mock.patch("app.agent.llm.chat_stream", return_value=iter(["回复。"])),
+            mock.patch("app.tts.synthesize"),
+            mock.patch("app.config.VOICE_TEXT_RATE_LIMIT", 1),
+        ):
+            ok = self.client.post("/api/chat", json={"message": "你好"}, headers=self.hdr)
+            self.assertEqual(ok.status_code, 200)
+            blocked = self.client.post("/api/chat", json={"message": "再来"}, headers=self.hdr)
+        self.assertEqual(blocked.status_code, 429)
+
+    def test_second_stream_rejected_while_first_active(self):
+        """bug #21：锁被占用时同用户第二条流直接 429。"""
+        from app.routers import session as session_router
+
+        uid = db.get_user_by_username("chatuser")["id"]
+        lock = session_router._get_chat_lock(uid)
+        # 白盒置位：模拟"上一条流正在生成"（asyncio.Lock 绑定事件循环，
+        # 跨线程真实 acquire 不可行，这里只验证端点的 locked 分支）
+        lock._locked = True
+        try:
+            with mock.patch("app.agent.llm.chat_stream", return_value=iter(["回复。"])):
+                blocked = self.client.post("/api/chat", json={"message": "并发"}, headers=self.hdr)
+        finally:
+            lock._locked = False
+        self.assertEqual(blocked.status_code, 429)
+
+    def test_error_event_hides_internal_details(self):
+        """bug #13：SSE error 事件不含内部异常细节，只发固定文案。"""
+        with (
+            mock.patch(
+                "app.agent.llm.chat_stream",
+                side_effect=RuntimeError("secret-db-path-internal"),
+            ),
+            self.client.stream(
+                "POST", "/api/chat", json={"message": "你好"}, headers=self.hdr
+            ) as resp,
+        ):
+            body = "".join(
+                chunk for chunk in resp.iter_text() if "error" in chunk or "delta" in chunk
+            )
+        self.assertIn("生成回复时出错", body)
+        self.assertNotIn("secret-db-path-internal", body)
+
+
+class SecurityHeadersTests(unittest.TestCase):
+    """bug #22：统一安全响应头。"""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._patch = mock.patch.object(config, "DB_PATH", Path(self._tmpdir.name) / "hdr.db")
+        self._patch.start()
+        db.init_db()
+
+    def tearDown(self):
+        self._patch.stop()
+        self._tmpdir.cleanup()
+
+    def test_headers_present(self):
+        with TestClient(app) as client:
+            resp = client.get("/health")
+        self.assertEqual(resp.headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(resp.headers.get("X-Content-Type-Options"), "nosniff")
+
+
+class QuestionRowColumnsTests(unittest.TestCase):
+    """bug #17：pick_random_question 返回 source_id/answer，参考答案兜底可达。"""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._patch = mock.patch.object(config, "DB_PATH", Path(self._tmpdir.name) / "pick.db")
+        self._patch.start()
+        db.init_db()
+        db.upsert_question(
+            source="mianshiya",
+            title="什么是 GIL",
+            source_id="mianshiya:123",
+            answer=None,
+            tags=["Python"],
+        )
+
+    def tearDown(self):
+        self._patch.stop()
+        self._tmpdir.cleanup()
+
+    def test_columns_present(self):
+        rows = db.pick_random_question(tags=["Python"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["source_id"], "mianshiya:123")
+        self.assertIsNone(rows[0]["answer"])
+
+
+class ParserHeadingTests(unittest.TestCase):
+    """bug #16：解析器标题判定收紧后的回归。"""
+
+    REPORT = (
+        "## 【总分】85/100\n"
+        "- 技术正确性：40\n"
+        "- 表达清晰度：建议加强 30\n"
+        "## 知识薄弱点\n"
+        "- 需要改进对索引薄弱点的理解\n"
+        "## 改进建议\n"
+        "- 每天刷 3 道题\n"
+    )
+
+    def test_dimensions_survive_keyword_in_item(self):
+        dims = _extract_dimensions(self.REPORT)
+        labels = [d["label"] for d in dims]
+        # 核心回归：维度行含"建议"字样不再提前截断，两条维度都被抽出
+        self.assertEqual(labels, ["技术正确性", "表达清晰度：建议加强"])
+        self.assertEqual(dims[1]["score"], 30)
+
+    def test_weak_points_keep_keyword_items(self):
+        weak = _extract_weak_points(self.REPORT)
+        self.assertIn("索引薄弱点", weak)
+
+
+def _mojibake(text: str) -> str:
+    """按真实故障路径构造乱码样本：UTF-8 字节被按 latin-1 误解码。"""
+    return text.encode("utf-8").decode("latin-1")
 
 
 class WalModeTests(unittest.TestCase):

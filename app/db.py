@@ -719,8 +719,15 @@ def pick_random_question(
     exclude_ids: set[int] | None = None,
     limit: int = 1,
 ) -> list[dict]:
-    """按条件在 SQL 层随机选题，避免全表捞回内存过滤。"""
-    sql = "SELECT id, title, tags, difficulty, source FROM questions WHERE 1=1"
+    """按条件在 SQL 层随机选题，避免全表捞回内存过滤。
+
+    SELECT 需带 source_id/answer：点评环节 _ensure_reference_answer 依赖
+    这两列做"缺答案同步补抓"兜底，漏列会让兜底永不可达（bug #17）。
+    """
+    sql = (
+        "SELECT id, title, tags, difficulty, source, source_id, answer "
+        "FROM questions WHERE 1=1"
+    )
     params: list = []
     if tags:
         conds = []
@@ -1014,11 +1021,13 @@ def touch_user_login(user_id: int) -> None:
 
 
 def create_auth_token(user_id: int, token: str, expires_at: str) -> None:
-    """保存登录令牌。"""
+    """保存登录令牌。签发时顺带清理该库全部过期令牌（bug #9：过期行只增不减）。"""
+    now = datetime.now(timezone.utc).isoformat()
     with closing(get_conn()) as conn, conn:
+        conn.execute("DELETE FROM auth_tokens WHERE expires_at <= ?", (now,))
         conn.execute(
             "INSERT INTO auth_tokens (token, user_id, created_at, expires_at) VALUES (?,?,?,?)",
-            (token, user_id, datetime.now(timezone.utc).isoformat(), expires_at),
+            (token, user_id, now, expires_at),
         )
 
 

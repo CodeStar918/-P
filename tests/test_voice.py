@@ -87,10 +87,12 @@ class VoiceServerTests(unittest.TestCase):
         s = InterviewSession("coach")
         s2 = maybe_switch_to_mock(s, "我想开始面试")
         self.assertEqual(s2.mode, "mock")
-        # 非首条消息不切换
+        # bug #15 修复后：恢复的活跃会话（多条消息）说"开始面试"也应切换，
+        # 与 REOPEN_GREETING 的承诺一致
         s = InterviewSession("coach")
         s.messages.append({"role": "user", "content": "之前问过"})
-        self.assertEqual(maybe_switch_to_mock(s, "开始面试").mode, "coach")
+        s.messages.append({"role": "assistant", "content": "回答"})
+        self.assertEqual(maybe_switch_to_mock(s, "开始面试").mode, "mock")
 
     def test_maybe_switch_to_mock_no_false_positive(self):
         """首条消息只是提问"模拟面试"相关概念，不应误切成模拟面试模式。"""
