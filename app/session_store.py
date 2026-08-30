@@ -74,6 +74,7 @@ def save_session(user_id: int, session: InterviewSession) -> None:
             score=score,
             report=session.messages[-1]["content"] if session.messages else None,
             weak_points=weak,
+            status="done",  # 完成的会话归档，否则 active 行永不完结（bug #3）
         )
     else:
         db.update_session_state(sid, state)

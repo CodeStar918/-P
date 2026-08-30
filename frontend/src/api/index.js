@@ -21,14 +21,23 @@ export const sessionApi = {
 /**
  * SSE 流式聊天。
  * @param {string} message
- * @param {{onDelta?: (s:string)=>void, onDone?: (ev:object)=>void, onError?: (s:string)=>void}} handlers
+ * @param {{signal?: AbortSignal, onDelta?: (s:string)=>void, onDone?: (ev:object)=>void, onError?: (s:string)=>void}} handlers
  */
 export async function chatStream(message, handlers = {}) {
-  const res = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-    body: JSON.stringify({ message }),
-  })
+  let res
+  try {
+    res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ message }),
+      signal: handlers.signal,
+    })
+  } catch (e) {
+    if (e?.name === 'AbortError') return // 主动取消：静默
+    // fetch 本身失败（断网/后端不可达）也必须进 onError，否则上层 sending 永久卡死
+    handlers.onError?.('网络异常，请检查连接后重试。')
+    return
+  }
   if (!res.ok || !res.body) {
     handlers.onError?.(await safeText(res))
     return
@@ -41,7 +50,10 @@ export async function chatStream(message, handlers = {}) {
       else if (ev.type === 'error') handlers.onError?.(ev.message)
     },
     () => {},
-    (e) => handlers.onError?.(String(e)),
+    (e) => {
+      if (e?.name === 'AbortError') return
+      handlers.onError?.(String(e))
+    },
   )
 }
 
@@ -61,11 +73,19 @@ export const customApi = {
   /** SSE 生成定制面试题 */
   generate(jobTitle, jd, handlers = {}) {
     return (async () => {
-      const res = await fetch('/api/custom/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ job_title: jobTitle, jd }),
-      })
+      let res
+      try {
+        res = await fetch('/api/custom/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ job_title: jobTitle, jd }),
+          signal: handlers.signal,
+        })
+      } catch (e) {
+        if (e?.name === 'AbortError') return
+        handlers.onError?.('网络异常，请检查连接后重试。')
+        return
+      }
       if (!res.ok || !res.body) {
         handlers.onError?.(await safeText(res))
         return
@@ -78,7 +98,10 @@ export const customApi = {
           else if (ev.type === 'error') handlers.onError?.(ev.message)
         },
         () => {},
-        (e) => handlers.onError?.(String(e)),
+        (e) => {
+          if (e?.name === 'AbortError') return
+          handlers.onError?.(String(e))
+        },
       )
     })()
   },

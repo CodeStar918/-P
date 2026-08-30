@@ -600,6 +600,14 @@ class InterviewSession:
                 yield EMPTY_BANK_HINT
                 return EMPTY_BANK_HINT
             diff = q["difficulty"] or "未知"
+        # 先提交"正在出题"状态：题目播报中途被用户打断（barge-in，CancelledError
+        # 不走下面的回滚分支）时，下一句会按本题回答处理；
+        # 若 LLM 调用真正失败（网络/限流），则回滚全部状态，避免"题目没听到却被
+        # 按本题消费"的会话卡死（bug #4）。快照必须先于 asked_ids.add 等一切变更。
+        prev_turn = self.turn
+        prev_messages = copy.deepcopy(self.messages)
+        prev_asked = set(self.asked_ids)
+        prev_q = self.current_q
         self.asked_ids.add(q["id"])
         self.current_q = q
         self.messages.append(
@@ -612,14 +620,20 @@ class InterviewSession:
                 ),
             }
         )
-        # 先提交"正在出题"状态：题目播报中途被用户打断时，下一句会按本题回答处理
         self.turn = "answering"
-        stream = self._chat_stream()
         self.messages.append({"role": "assistant", "content": ""})
         msg = self.messages[-1]
-        for delta in stream:
-            msg["content"] += delta
-            yield delta
+        try:
+            stream = self._chat_stream()
+            for delta in stream:
+                msg["content"] += delta
+                yield delta
+        except Exception:
+            self.turn = prev_turn
+            self.asked_ids = prev_asked
+            self.current_q = prev_q
+            self.messages = prev_messages
+            raise
         msg["content"] = msg["content"].strip() or NO_REPLY_FALLBACK
         return msg["content"]
 
@@ -648,6 +662,12 @@ class InterviewSession:
         return reply
 
     def _finish_report_stream(self):
+        # 状态提交与回滚：报告流失败（LLM 重试耗尽是常态事件）若不回滚，
+        # "finished=True + 空 assistant 消息" 的损坏状态被语音侧持久化，
+        # 该会话此后永远只回 FINISHED_HINT、报告永久丢失（bug #4）。
+        # barge-in（CancelledError）不回滚：保持"正在出报告"语义由用户重新触发。
+        prev_turn, prev_finished = self.turn, self.finished
+        prev_messages = copy.deepcopy(self.messages)
         self.turn = "report"
         self.finished = True
         answers_txt = "\n".join(
@@ -666,28 +686,40 @@ class InterviewSession:
                 ),
             }
         )
-        stream = self._chat_stream(max_tokens=3000, model=config.REPORT_MODEL or None)
-        self.messages.append({"role": "assistant", "content": ""})
-        msg = self.messages[-1]
-        for delta in stream:
-            msg["content"] += delta
-            yield delta
+        try:
+            stream = self._chat_stream(max_tokens=3000, model=config.REPORT_MODEL or None)
+            self.messages.append({"role": "assistant", "content": ""})
+            msg = self.messages[-1]
+            for delta in stream:
+                msg["content"] += delta
+                yield delta
+        except Exception:
+            self.turn, self.finished = prev_turn, prev_finished
+            self.messages = prev_messages
+            raise
         msg["content"] = msg["content"].strip() or NO_REPLY_FALLBACK
         self._persist_report(msg["content"])
         return msg["content"]
 
     def _persist_report(self, report: str) -> None:
-        """把本轮问答与报告落库，供侧边栏「面试复盘」展示；失败仅记日志不影响对话。"""
+        """把本轮问答与报告落库，供侧边栏「面试复盘」展示；失败仅记日志不影响对话。
+
+        复用当前活跃会话行（session_id）：此前 create_session 新建第二条 done 记录，
+        与 save_session 更新的 active 行互不相知，导致历史列表每场面试重复两条、
+        复盘数据分裂（bug #3）。仅内存会话（无 session_id，如旧流程）才新建行。
+        """
         try:
-            sid = db.create_session(
-                self.mode,
-                job_title=self.job_title,
-                jd=self.jd,
-                source="定制" if self.custom_questions else "题库",
-                persona=self.persona,
-                started_at=self.started_at,
-                user_id=self.user_id,
-            )
+            sid = self.session_id
+            if sid is None:
+                sid = db.create_session(
+                    self.mode,
+                    job_title=self.job_title,
+                    jd=self.jd,
+                    source="定制" if self.custom_questions else "题库",
+                    persona=self.persona,
+                    started_at=self.started_at,
+                    user_id=self.user_id,
+                )
             db.add_session_answers(sid, self.answers)
             db.finish_session(sid, _report_score(report), report, _extract_weak_points(report))
         except Exception:
