@@ -121,8 +121,7 @@ def _extract_dimensions(report: str) -> list[dict]:
             continue
         is_heading_style = bool(re.match(r"^(【|\#{1,6}\s)", line))
         if is_heading_style or (
-            not line.startswith(("-", "•"))
-            and any(k in line for k in ("薄弱点", "改进", "建议"))
+            not line.startswith(("-", "•")) and any(k in line for k in ("薄弱点", "改进", "建议"))
         ):
             break
         m = re.match(r"^[-•]\s*(.+?)[:：]\s*(\d{1,3})\s*$", line)

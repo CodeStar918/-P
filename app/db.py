@@ -724,10 +724,7 @@ def pick_random_question(
     SELECT 需带 source_id/answer：点评环节 _ensure_reference_answer 依赖
     这两列做"缺答案同步补抓"兜底，漏列会让兜底永不可达（bug #17）。
     """
-    sql = (
-        "SELECT id, title, tags, difficulty, source, source_id, answer "
-        "FROM questions WHERE 1=1"
-    )
+    sql = "SELECT id, title, tags, difficulty, source, source_id, answer FROM questions WHERE 1=1"
     params: list = []
     if tags:
         conds = []
