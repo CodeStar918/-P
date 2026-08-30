@@ -207,6 +207,9 @@ def _rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict]:
 def init_db() -> None:
     """建库建表 + 执行迁移（幂等，可反复调用）。"""
     with closing(get_conn()) as conn, conn:
+        # WAL 让读写不再互斥：爬虫批量写、语音 WS 写与用户请求读可并发，
+        # 否则默认回滚日志的写锁全库独占，并发时 database is locked（bug #8）
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA)
         _migrate(conn)
 
@@ -889,11 +892,17 @@ def archive_active_session(user_id: int) -> None:
 
 
 def list_sessions_by_user(user_id: int, limit: int = 50) -> list[dict]:
-    """某用户的面试历史（含进行中与已完成的，按开始时间倒序）。"""
+    """某用户的面试历史（含进行中与已完成的，按开始时间倒序）。
+
+    显式列清单：历史列表不需要 state_json / jd 等大字段，
+    SELECT * 会在 limit 异常放大时把几十 KB/行的数据全部拉回（bug #11）。
+    """
     with closing(get_conn()) as conn:
         return _rows_to_dicts(
             conn.execute(
-                "SELECT * FROM sessions WHERE user_id = ? ORDER BY started_at DESC LIMIT ?",
+                "SELECT id, mode, job_title, source, persona, started_at, score, "
+                "report, weak_points, status FROM sessions "
+                "WHERE user_id = ? ORDER BY started_at DESC LIMIT ?",
                 (user_id, limit),
             ).fetchall()
         )

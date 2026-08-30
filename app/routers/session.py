@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -135,7 +135,12 @@ def reset_session(user_row=auth.CurrentUser) -> dict:
 
 
 @router.get("/session/history")
-def session_history(user_row=auth.CurrentUser, limit: int = 50) -> dict:
+def session_history(
+    user_row=auth.CurrentUser,
+    # 下界防 LIMIT 负数（SQLite LIMIT -1 等价无限制，bug #11 拉全表），
+    # 上界防单请求拉取全量历史（每行含 report 大文本）
+    limit: int = Query(50, ge=1, le=200),
+) -> dict:
     """某用户的面试历史（复盘/继续）。"""
     return {"items": session_store.list_history(user_row["id"], limit=limit)}
 

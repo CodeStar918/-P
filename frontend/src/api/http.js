@@ -11,7 +11,12 @@ export function setToken(t) {
   else localStorage.removeItem(TOKEN_KEY)
 }
 
-export const http = axios.create({ baseURL: '' })
+export const http = axios.create({
+  baseURL: '',
+  // 数组查询参数序列化为 tags=a&tags=b（与 FastAPI list Query 契约匹配）。
+  // axios 默认输出 tags[]=a，键名不匹配会导致后端收到 None、筛选被静默忽略。
+  paramsSerializer: { indexes: null },
+})
 
 http.interceptors.request.use((cfg) => {
   const t = getToken()
