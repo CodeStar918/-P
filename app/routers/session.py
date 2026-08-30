@@ -12,14 +12,15 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 import app.prompts as prompts
 import app.session_store as session_store
-from app import auth
+from app import auth, config
 from app.agent.coach import InterviewSession, parse_report
+from app.ratelimit import hit
 
 logger = logging.getLogger("interview_coach.api.session")
 
@@ -145,9 +146,31 @@ def session_history(
     return {"items": session_store.list_history(user_row["id"], limit=limit)}
 
 
+#: 每用户聊天锁：同一用户同时只允许一条 SSE 流在推进（bug #21：并发请求各自
+#: 反序列化独立会话副本、互相覆盖 save_session，丢回合+双份 LLM 计费）。
+_chat_locks: dict[int, asyncio.Lock] = {}
+
+
+def _get_chat_lock(user_id: int) -> asyncio.Lock:
+    return _chat_locks.setdefault(user_id, asyncio.Lock())
+
+
 @router.post("/chat")
 async def chat(body: ChatBody, user_row=auth.CurrentUser):
     """SSE 流式对话：推进当前会话（无会话时自动建辅导答疑）。"""
+    # 按用户限流（bug #10）：与语音 WS 共用"对话消息"限流配置，防脚本刷消息烧 LLM 余额
+    if not hit(
+        f"chat:{user_row['id']}",
+        config.VOICE_TEXT_RATE_LIMIT,
+        config.VOICE_TEXT_RATE_WINDOW,
+    ):
+        raise HTTPException(status_code=429, detail="发送过于频繁，请稍候再试")
+
+    # 并发保护：上一条流未结束时直接拒绝（非阻塞检查）
+    lock = _get_chat_lock(user_row["id"])
+    if lock.locked():
+        raise HTTPException(status_code=429, detail="上一条回复仍在生成中，请稍候")
+
     session = session_store.load_active_session(user_row["id"])
     if session is None:
         session = InterviewSession("coach", user_id=user_row["id"])
@@ -164,41 +187,44 @@ async def chat(body: ChatBody, user_row=auth.CurrentUser):
             return None
 
     async def _event_stream():
-        try:
-            while True:
-                delta = await asyncio.to_thread(_next_chunk)
-                if delta is None:
-                    break
-                if delta:
-                    yield _sse({"type": "delta", "content": delta})
-            # 流结束：先把助手回复补进展示历史，再持久化会话（保证刷新后不丢最后一条）
-            session.display_history.append(
-                ["assistant", session.messages[-1]["content"] if session.messages else ""]
-            )
+        # 锁随流生命周期：流结束/客户端断开（GeneratorExit 经 aclose 展开）都会释放
+        async with lock:
             try:
-                session_store.save_session(user_row["id"], session)
-            except Exception:
-                logger.exception("会话持久化失败（user=%s）", user_row["username"])
-            report = None
-            if (
-                session.finished
-                and session.messages
-                and session.messages[-1].get("role") == "assistant"
-            ):
-                report = session.messages[-1]["content"]
-            yield _sse(
-                {
-                    "type": "done",
-                    "finished": session.finished,
-                    "mode": session.mode,
-                    "history": session.history_for_display(),
-                    "report": report,
-                    "report_data": parse_report(report) if report else None,
-                }
-            )
-        except Exception as e:  # noqa: BLE001 - 流式里兜底所有异常并告知前端
-            logger.exception("聊天流式处理异常")
-            yield _sse({"type": "error", "message": str(e)})
+                while True:
+                    delta = await asyncio.to_thread(_next_chunk)
+                    if delta is None:
+                        break
+                    if delta:
+                        yield _sse({"type": "delta", "content": delta})
+                # 流结束：先把助手回复补进展示历史，再持久化会话（保证刷新后不丢最后一条）
+                session.display_history.append(
+                    ["assistant", session.messages[-1]["content"] if session.messages else ""]
+                )
+                try:
+                    session_store.save_session(user_row["id"], session)
+                except Exception:
+                    logger.exception("会话持久化失败（user=%s）", user_row["username"])
+                report = None
+                if (
+                    session.finished
+                    and session.messages
+                    and session.messages[-1].get("role") == "assistant"
+                ):
+                    report = session.messages[-1]["content"]
+                yield _sse(
+                    {
+                        "type": "done",
+                        "finished": session.finished,
+                        "mode": session.mode,
+                        "history": session.history_for_display(),
+                        "report": report,
+                        "report_data": parse_report(report) if report else None,
+                    }
+                )
+            except Exception:  # noqa: BLE001 - 流式里兜底所有异常并告知前端
+                logger.exception("聊天流式处理异常")
+                # 内部异常细节不回显（bug #13）：与 voice_ws 一致只发固定文案
+                yield _sse({"type": "error", "message": "生成回复时出错，请稍后再试"})
 
     return StreamingResponse(
         _event_stream(),

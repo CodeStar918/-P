@@ -62,9 +62,14 @@ REOPEN_GREETING = (
 
 
 def maybe_switch_to_mock(session: InterviewSession, text: str) -> InterviewSession:
-    """首条消息说"开始面试/模拟面试"时，从答疑模式切换到模拟面试模式。"""
+    """用户说"开始面试/模拟面试"时，从答疑模式切换到模拟面试模式。
+
+    不限首条消息（bug #15）：恢复的活跃答疑会话必然已有多条消息，而
+    REOPEN_GREETING 明确承诺"可以说'开始面试'开始新模拟面试"；
+    误切防护由 _MOCK_START_RE 保证（提问式如"模拟面试是什么"不命中）。
+    """
     match = _MOCK_START_RE.search(text)
-    if session.mode == "coach" and len(session.messages) <= 1 and match is not None:
+    if session.mode == "coach" and match is not None:
         return InterviewSession("mock", persona=session.persona, user_id=session.user_id)
     return session
 
@@ -130,12 +135,18 @@ class VoiceConnection:
             self._cleanup()
 
     async def _register(self) -> None:
-        """单用户互踢：新连接踢掉同账号旧连接（多标签页会话分叉的根源）。"""
+        """单用户互踢：先原子登记自己，再关闭同账号旧连接（bug #14）。
+
+        旧顺序（先查旧→await close→再登记）存在挂起间隙：两个新连接同时接通时
+        后恢复者覆盖先恢复者，先恢复的连接变成活跃但脱管，绕过互踢常驻在线。
+        现在登记与覆盖在同一同步段内完成（无 await），清理处已有 `is self.ws`
+        身份校验，被顶掉的连接自行清理，不会误删后到者的登记。
+        """
         old = _CONNECTIONS.get(self.user_id)
-        if old is not None:
+        _CONNECTIONS[self.user_id] = self.ws
+        if old is not None and old is not self.ws:
             with suppress(Exception):
                 await old.close(code=WS_CLOSE_KICKED, reason="已在其他页面接通")
-        _CONNECTIONS[self.user_id] = self.ws
 
     def _restore_session(self) -> tuple[InterviewSession, str]:
         """按用户恢复/新建会话，返回（会话, 开场白）。"""

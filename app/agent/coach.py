@@ -63,15 +63,18 @@ def _report_score(report: str) -> int | None:
 
 
 def _extract_weak_points(report: str) -> str | None:
-    """抽取报告"知识薄弱点"段落的清单行（提示词要求以 - 开头）。"""
+    """抽取报告"知识薄弱点"段落的清单行（提示词要求以 - 开头）。
+
+    标题判定仅在未激活时生效：激活后含"薄弱点"字样的清单行仍是条目，
+    不会被误判成新标题而丢弃（bug #16）。
+    """
     out: list[str] = []
     active = False
     for raw in (report or "").splitlines():
         line = raw.strip()
-        if "薄弱点" in line:
-            active = True
-            continue
         if not active:
+            if "薄弱点" in line:
+                active = True
             continue
         if line.startswith(("-", "•")) or re.match(r"^\d+[.、]", line):
             out.append("- " + re.sub(r"^[-•\d.、\s]+", "", line).strip())
@@ -81,15 +84,18 @@ def _extract_weak_points(report: str) -> str | None:
 
 
 def _extract_section_items(report: str, section_key: str) -> list[str]:
-    """抽取报告中某个小节的清单行（标题含 section_key，条目以 - / • / 数字开头）。"""
+    """抽取报告中某个小节的清单行（标题含 section_key，条目以 - / • / 数字开头）。
+
+    标题判定仅在未激活时生效，避免条目本身含 section_key 字样被误判为
+    新标题而截断清单（bug #16）。
+    """
     out: list[str] = []
     active = False
     for raw in (report or "").splitlines():
         line = raw.strip()
-        if section_key in line:
-            active = True
-            continue
         if not active:
+            if section_key in line:
+                active = True
             continue
         if line.startswith(("-", "•")) or re.match(r"^\d+[.、]", line):
             out.append(re.sub(r"^[-•\d.、\s]+", "", line).strip())
@@ -100,7 +106,11 @@ def _extract_section_items(report: str, section_key: str) -> list[str]:
 
 def _extract_dimensions(report: str) -> list[dict]:
     """抽取维度分：仅匹配【总分】之后、薄弱点/改进等章节之前的
-    `- 技术正确性：40` 或 `- 技术正确性 40`，返回 [{"label","score"}]。"""
+    `- 技术正确性：40` 或 `- 技术正确性 40`，返回 [{"label","score"}]。
+
+    章节终止仅认"标题样式行"（【..】/ ## 开头，或非清单前缀且含关键词的行）：
+    维度行本身含"建议"等字样不再提前截断（bug #16）。
+    """
     dims: list[dict] = []
     started = False
     for raw in (report or "").splitlines():
@@ -109,7 +119,10 @@ def _extract_dimensions(report: str) -> list[dict]:
             if "总分" in line:
                 started = True
             continue
-        if any(k in line for k in ("薄弱点", "改进", "建议")):
+        is_heading_style = bool(re.match(r"^(【|\#{1,6}\s)", line))
+        if is_heading_style or (
+            not line.startswith(("-", "•")) and any(k in line for k in ("薄弱点", "改进", "建议"))
+        ):
             break
         m = re.match(r"^[-•]\s*(.+?)[:：]\s*(\d{1,3})\s*$", line)
         if not m:

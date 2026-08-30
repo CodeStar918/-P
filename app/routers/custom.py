@@ -82,9 +82,10 @@ async def generate(body: CustomBody, user_row=auth.CurrentUser):
                 except _queue.Empty:
                     break
             qs, meta = task.result()
-        except Exception as e:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             logger.exception("定制面试生成失败")
-            yield _sse({"type": "error", "message": f"生成失败：{e}"})
+            # 内部异常细节（上游端点/配额/路径等）不回显给客户端（bug #13）
+            yield _sse({"type": "error", "message": "生成失败，请稍后重试"})
             return
 
         if not qs:
