@@ -60,15 +60,6 @@ export function normalizeForEcho(text) {
   return (text || '').replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '')
 }
 
-export function bytesToB64(bytes) {
-  let bin = ''
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
-  }
-  return btoa(bin)
-}
-
 export function base64ToBytes(b64) {
   const bin = atob(b64)
   const bytes = new Uint8Array(bin.length)

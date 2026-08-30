@@ -3,19 +3,28 @@
 // 职责：WebSocket 协议处理、ASR 音频流推送、播报播放队列（按 sid 有序零间隙）、
 // 开口即打断（ASR 内容级回声过滤 + 手动打断）、edge-tts 失败降级本地语音。
 // 音色/VAD 等运行时配置来自后端 /api/config/voice。
-import { onUnmounted, reactive, ref } from 'vue'
+//
+// 结构约定：
+// - 状态机：V.phase 是通话阶段单一事实来源（idle/connecting/listening/speaking），
+//   V.speaking 是其派生镜像（高频路径直接读）；
+// - 消息分发：MSG_HANDLERS 注册表按 type 分发，不再 if-else 链；
+// - 音频采集：AudioWorklet 优先（ScriptProcessor 已废弃），失败回退 ScriptProcessor；
+//   上行音频为二进制帧（Int16 LE PCM），控制消息仍为 JSON 文本帧。
+import { onUnmounted, reactive } from 'vue'
 import { configApi, customApi } from '../../api'
 import { getToken } from '../../api/http'
-import {
-  MOCK_START_RE,
-  base64ToBytes,
-  bytesToB64,
-  calcRms,
-  echoMatch,
-  normalizeForEcho,
-} from './voiceUtils'
+import { MOCK_START_RE, base64ToBytes, calcRms, echoMatch, normalizeForEcho } from './voiceUtils'
+import workletUrl from './pcm-worklet.js?url'
 
 const DEBUG_DEFAULT = false
+
+// 通话阶段：单一事实来源
+const PHASE = {
+  IDLE: 'idle', // 未接通
+  CONNECTING: 'connecting', // 接通中 / 等待回复
+  LISTENING: 'listening', // 聆听用户
+  SPEAKING: 'speaking', // 播报中（可被打断）
+}
 
 export function useVoiceCall() {
   // ---------- UI 状态（响应式） ----------
@@ -41,8 +50,8 @@ export function useVoiceCall() {
   const V = {
     ws: null,
     buf: '',
-    speaking: false,
-    bound: false,
+    phase: PHASE.IDLE,
+    speaking: false, // phase 的派生镜像（高频路径直接读）
     audioCtx: null,
     playingAudio: false,
     replyEnded: false,
@@ -65,28 +74,30 @@ export function useVoiceCall() {
     mic: null,
     micProc: null,
     asrReady: false,
-    asrRetries: 0,
-    asrSampleRate: 16000,
     lastAsrEvent: 0,
     vadAvg: 0,
     speakingText: '',
     prevSpeechText: '',
     echoUntil: 0,
-    vadOn: false,
-    analyser: null,
-    vadData: null,
     vadHits: 0,
-    quietTicks: 0,
-    bargeArmed: false,
-    noiseFloor: 0,
-    bargeWait: 0,
     micLevel: 0,
     voicesWaiting: false,
-    tts: 'edge',
   }
 
   // VAD 配置（后端下发，替代原 HTML 模板替换）
   const VAD = { threshold: 0.08, hits: 5, quietFrames: 3, noiseMargin: 1.6 }
+
+  // ---------- 状态机 ----------
+  function setPhase(p) {
+    V.phase = p
+    V.speaking = p === PHASE.SPEAKING
+    setSpeakingUI(V.speaking)
+    if (V.speaking) {
+      // 每次进入播报：重置 VAD 判定，避免上一轮残留误触发打断
+      V.vadAvg = 0
+      V.vadHits = 0
+    }
+  }
 
   // ---------- 调试面板 ----------
   function dbg(msg) {
@@ -99,7 +110,7 @@ export function useVoiceCall() {
       ':' +
       ('0' + d.getSeconds()).slice(-2)
     const head =
-      'speaking:' + (V.speaking ? 'Y' : 'N') +
+      'phase:' + V.phase +
       ' mic:' + (V.mic ? 'Y' : 'N') +
       ' asr:' + (V.asrReady ? 'Y' : 'N') +
       ' lv:' + Math.round((V.micLevel || 0) * 260)
@@ -173,59 +184,78 @@ export function useVoiceCall() {
     }
   }
 
-  function startAudioStream() {
+  // 采集回调（AudioWorklet / ScriptProcessor 共用）：
+  // 电平表 → VAD 打断检测 → 转 Int16 PCM → 二进制帧上行
+  function handleAudioChunk(f32) {
+    const rms = calcRms(f32)
+    V.micLevel = rms
+    updateMicMeter(rms)
+    if (V.speaking) vadCheck(rms)
+    if (!V.ws || V.ws.readyState !== 1 || !V.asrReady) return
+    const pcm = new Int16Array(f32.length)
+    for (let i = 0; i < f32.length; i++) {
+      const s = Math.max(-1, Math.min(1, f32[i]))
+      pcm[i] = (s < 0 ? s * 0x8000 : s * 0x7fff) | 0
+    }
+    V.ws.send(pcm.buffer) // 二进制帧：Int16 LE PCM（省 base64 ~33% 开销）
+  }
+
+  async function startAudioStream() {
     if (V.mic) return
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setStatus('请用 Chrome / Edge 浏览器')
       return
     }
-    navigator.mediaDevices
-      .getUserMedia({
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
-      .then((stream) => {
-        const AC = window.AudioContext || window.webkitAudioContext
-        const ctx = V.audioCtx || new AC()
-        if (ctx.state === 'suspended') {
-          try {
-            ctx.resume()
-          } catch (e) {
-            /* 忽略 */
-          }
-        }
-        V.audioCtx = ctx
-        const src = ctx.createMediaStreamSource(stream)
-        const proc = ctx.createScriptProcessor(4096, 1, 1)
-        proc.onaudioprocess = (e) => {
-          const data = e.inputBuffer.getChannelData(0)
-          const rms = calcRms(data)
-          V.micLevel = rms
-          updateMicMeter(rms)
-          if (V.speaking) vadCheck(rms)
-          if (!V.ws || V.ws.readyState !== 1 || !V.asrReady) return
-          const pcm = new Int16Array(data.length)
-          for (let i = 0; i < data.length; i++) {
-            const s = Math.max(-1, Math.min(1, data[i]))
-            pcm[i] = (s < 0 ? s * 0x8000 : s * 0x7fff) | 0
-          }
-          V.ws.send(JSON.stringify({ type: 'audio', data: bytesToB64(new Uint8Array(pcm.buffer)) }))
-        }
-        const g = ctx.createGain()
-        g.gain.value = 0 // 静音输出，避免把采集声音播出来
-        proc.connect(g)
-        g.connect(ctx.destination)
-        V.mic = stream
-        V.micProc = proc
-        ui.micOn = true
-        if (V.ws && V.ws.readyState === 1) {
-          V.asrSampleRate = ctx.sampleRate
-          V.ws.send(JSON.stringify({ type: 'asr_start', sample_rate: ctx.sampleRate }))
-          dbg('音频采集启动 sampleRate=' + ctx.sampleRate)
-        }
-      })
-      .catch((e) => {
-        setStatus('麦克风不可用: ' + (e && e.name) || e, true)
-      })
+    } catch (e) {
+      setStatus('麦克风不可用: ' + ((e && e.name) || e), true)
+      return
+    }
+    const AC = window.AudioContext || window.webkitAudioContext
+    const ctx = V.audioCtx || new AC()
+    if (ctx.state === 'suspended') {
+      try {
+        ctx.resume()
+      } catch (e) {
+        /* 忽略 */
+      }
+    }
+    V.audioCtx = ctx
+    const src = ctx.createMediaStreamSource(stream)
+    const g = ctx.createGain()
+    g.gain.value = 0 // 静音输出，避免把采集声音播出来
+    g.connect(ctx.destination)
+    // AudioWorklet 优先（ScriptProcessor 是已废弃 API，主线程跑会卡顿），
+    // 不支持/注册失败时回退 ScriptProcessor
+    let viaWorklet = false
+    if (ctx.audioWorklet) {
+      try {
+        await ctx.audioWorklet.addModule(workletUrl)
+        const node = new AudioWorkletNode(ctx, 'pcm-capture', { numberOfOutputs: 0 })
+        node.port.onmessage = (e) => handleAudioChunk(e.data)
+        src.connect(node)
+        V.micProc = node
+        viaWorklet = true
+      } catch (e) {
+        dbg('AudioWorklet 注册失败，回退 ScriptProcessor: ' + e)
+      }
+    }
+    if (!viaWorklet) {
+      const proc = ctx.createScriptProcessor(4096, 1, 1)
+      proc.onaudioprocess = (e) => handleAudioChunk(e.inputBuffer.getChannelData(0))
+      proc.connect(g)
+      V.micProc = proc
+    }
+    V.mic = stream
+    ui.micOn = true
+    if (V.ws && V.ws.readyState === 1) {
+      V.ws.send(JSON.stringify({ type: 'asr_start', sample_rate: ctx.sampleRate }))
+      dbg('音频采集启动 sampleRate=' + ctx.sampleRate + (viaWorklet ? ' (worklet)' : ' (legacy)'))
+    }
   }
 
   function updateMicMeter(rms) {
@@ -237,6 +267,7 @@ export function useVoiceCall() {
     if (V.micProc) {
       try {
         V.micProc.disconnect()
+        if (V.micProc.port) V.micProc.port.onmessage = null
       } catch (e) {
         /* 忽略 */
       }
@@ -304,7 +335,7 @@ export function useVoiceCall() {
     }
   }
 
-  // 音量打断（兜底）：ASR 静默超 1.5s 时启用（原逻辑保留，实际由内容级打断承担）
+  // 音量打断（兜底）：ASR 静默超 1.5s 时启用（实际由内容级打断承担主防线）
   function vadCheck(rms) {
     if (V.lastAsrEvent && Date.now() - V.lastAsrEvent < 1500) return
     V.vadAvg = (V.vadAvg > 0 ? V.vadAvg : rms) * 0.995 + rms * 0.005
@@ -327,7 +358,7 @@ export function useVoiceCall() {
     V.lastSendText = t
     dbg('sendText: ' + t.slice(0, 20))
     stopAudio()
-    V.speaking = false
+    setPhase(PHASE.CONNECTING)
     V.echoUntil = Date.now() + 2500
     V.replyEnded = false
     V.buf = ''
@@ -372,19 +403,12 @@ export function useVoiceCall() {
     V.replyEnded = false
     V.fallbackBySid[sid] = text || ''
     if (V.nextPlaySid === 0) V.nextPlaySid = sid
-    V.vadAvg = 0
     if (!V.speaking) {
       dbg('播报开始: ' + (text || '').slice(0, 22))
-      V.speaking = true
+      setPhase(PHASE.SPEAKING)
       setStatus('播报中…', true)
-      setSpeakingUI(true)
-      V.quietTicks = 0
-      V.vadHits = 0
-      V.bargeArmed = false
-      V.noiseFloor = 0
-      V.bargeWait = 0
     } else {
-      V.quietTicks = 0
+      V.vadAvg = 0
       V.vadHits = 0
     }
   }
@@ -476,9 +500,8 @@ export function useVoiceCall() {
       return
     }
     dbg('播报结束')
-    V.speaking = false
+    setPhase(PHASE.LISTENING)
     V.echoUntil = Date.now() + 2500
-    setSpeakingUI(false)
     if (V.replyEnded && ui.active) setStatus('聆听中…')
   }
 
@@ -518,12 +541,11 @@ export function useVoiceCall() {
     if (!V.speaking) return
     dbg('打断触发')
     stopAudio()
-    V.speaking = false
+    setPhase(PHASE.LISTENING)
     V.buf = ''
     V.replyEnded = false
     V.liveBubbleIndex = -1
     V.echoUntil = Date.now() + 2500
-    setSpeakingUI(false)
     if (V.ws && V.ws.readyState === 1) V.ws.send(JSON.stringify({ type: 'stop' }))
     setStatus('已打断，请继续')
   }
@@ -566,14 +588,8 @@ export function useVoiceCall() {
 
   function startFallbackSpeech(text) {
     if (!V.speaking) {
-      V.speaking = true
+      setPhase(PHASE.SPEAKING)
       setStatus('播报中…', true)
-      setSpeakingUI(true)
-      V.quietTicks = 0
-      V.vadHits = 0
-      V.bargeArmed = false
-      V.noiseFloor = 0
-      V.bargeWait = 0
     }
     V.fallbackActive++
     const fallbackEnd = () => {
@@ -610,6 +626,103 @@ export function useVoiceCall() {
     }
   }
 
+  // ---------- WebSocket 消息注册表（按 type 分发） ----------
+  const MSG_HANDLERS = {
+    // 一轮回复开始：重置播放队列起点
+    reply_start(m) {
+      stopAudio()
+      setPhase(PHASE.CONNECTING)
+      V.prevSpeechText = V.speakingText || ''
+      V.speakingText = ''
+      V.replyEnded = false
+      V.suppressAudio = false
+      V.nextPlaySid = m.first_sid || 0
+      setStatus('正在合成语音…', true)
+    },
+    // 文本增量（实时字幕）
+    delta(m) {
+      if (V.suppressAudio) return
+      V.buf += m.content
+      V.speakingText += m.content
+      updateLive(V.buf)
+    },
+    audio_start(m) {
+      onAudioStart(m.sid, m.text)
+    },
+    audio(m) {
+      onAudioFrame(m.sid, m.data)
+    },
+    audio_end(m) {
+      onAudioEnd(m.sid)
+    },
+    // 该段在线 TTS 失败：跳过并回退浏览器本地语音
+    tts_error(m) {
+      V.skippedSids[m.sid] = true
+      scheduleReady()
+      speakFallback(V.fallbackBySid[m.sid] || '')
+    },
+    done() {
+      if (V.suppressAudio) return
+      V.replyEnded = true
+      setTimeout(audioDone, 300)
+    },
+    cancelled() {
+      if (!V.suppressAudio) return
+      V.buf = ''
+      setStatus('已打断，请继续')
+    },
+    asr_ready() {
+      V.asrReady = true
+      V.lastAsrEvent = Date.now()
+      setPhase(PHASE.LISTENING)
+      setStatus('聆听中…')
+      dbg('ASR 就绪')
+    },
+    asr_error(m) {
+      V.asrReady = false
+      V.lastAsrEvent = 0
+      dbg('ASR错误: ' + (m.message || ''))
+      setStatus('语音识别中断，自动重连中…', true)
+    },
+    // ASR 整句结果：当用户输入处理
+    asr_text(m) {
+      if (m.content) handleAsrText(m.content)
+    },
+    // ASR 中间结果：仅播报中处理，用于"开口即打断"
+    asr_partial(m) {
+      if (V.phase !== PHASE.SPEAKING) return
+      const pt = (m.content || '').trim()
+      if (!pt) return
+      V.lastAsrEvent = Date.now()
+      dbg('ASR中间: ' + pt.slice(0, 16))
+      if (isEchoLike(pt)) {
+        dbg('回声忽略(中间): ' + pt.slice(0, 14))
+        return
+      }
+      dbg('开口打断(中间结果): ' + pt.slice(0, 18))
+      bargeIn()
+    },
+    // 结构化错误：code 区分限流与内部错误
+    error(m) {
+      if (m.code === 'rate_limit') {
+        setStatus('请求过于频繁，请稍候…', true)
+      } else {
+        setStatus('小P出错了: ' + (m.message || '未知错误'), true)
+      }
+    },
+  }
+
+  function onMessage(ev) {
+    let m
+    try {
+      m = JSON.parse(ev.data)
+    } catch (e) {
+      return
+    }
+    const handler = MSG_HANDLERS[m.type]
+    if (handler) handler(m)
+  }
+
   // ---------- WebSocket ----------
   async function loadConfig() {
     try {
@@ -618,7 +731,6 @@ export function useVoiceCall() {
       VAD.hits = cfg.vad_hits
       VAD.quietFrames = cfg.vad_quiet_frames
       VAD.noiseMargin = cfg.vad_noise_margin
-      V.tts = cfg.tts || 'edge'
     } catch (e) {
       /* 使用默认值 */
     }
@@ -636,6 +748,7 @@ export function useVoiceCall() {
     const token = getToken()
     const url = proto + window.location.host + '/ws/voice?token=' + encodeURIComponent(token)
     ui.active = true
+    setPhase(PHASE.CONNECTING)
     setStatus('正在接通…', true)
     let ws
     try {
@@ -658,82 +771,14 @@ export function useVoiceCall() {
       startAudioStream()
     }
 
-    ws.onmessage = (ev) => {
-      let m
-      try {
-        m = JSON.parse(ev.data)
-      } catch (e) {
-        return
-      }
-      if (m.type === 'reply_start') {
-        stopAudio()
-        V.speaking = false
-        V.prevSpeechText = V.speakingText || ''
-        V.speakingText = ''
-        V.replyEnded = false
-        V.suppressAudio = false
-        V.nextPlaySid = m.first_sid || 0
-        setStatus('正在合成语音…', true)
-      } else if (m.type === 'delta') {
-        if (V.suppressAudio) return
-        V.buf += m.content
-        V.speakingText += m.content
-        updateLive(V.buf)
-      } else if (m.type === 'audio_start') {
-        onAudioStart(m.sid, m.text)
-      } else if (m.type === 'audio') {
-        onAudioFrame(m.sid, m.data)
-      } else if (m.type === 'audio_end') {
-        onAudioEnd(m.sid)
-      } else if (m.type === 'tts_error') {
-        V.skippedSids[m.sid] = true
-        scheduleReady()
-        speakFallback(V.fallbackBySid[m.sid] || '')
-      } else if (m.type === 'done') {
-        if (V.suppressAudio) return
-        V.replyEnded = true
-        setTimeout(audioDone, 300)
-      } else if (m.type === 'cancelled') {
-        if (!V.suppressAudio) return
-        V.buf = ''
-        setStatus('已打断，请继续')
-      } else if (m.type === 'asr_ready') {
-        V.asrReady = true
-        V.asrRetries = 0
-        V.lastAsrEvent = Date.now()
-        setStatus('聆听中…')
-        dbg('ASR 就绪')
-      } else if (m.type === 'asr_error') {
-        V.asrReady = false
-        V.lastAsrEvent = 0
-        dbg('ASR错误: ' + (m.message || ''))
-        setStatus('语音识别中断，自动重连中…', true)
-      } else if (m.type === 'asr_text') {
-        if (m.content) handleAsrText(m.content)
-      } else if (m.type === 'asr_partial') {
-        if (!V.speaking) return
-        const pt = (m.content || '').trim()
-        if (!pt) return
-        V.lastAsrEvent = Date.now()
-        dbg('ASR中间: ' + pt.slice(0, 16))
-        if (isEchoLike(pt)) {
-          dbg('回声忽略(中间): ' + pt.slice(0, 14))
-          return
-        }
-        dbg('开口打断(中间结果): ' + pt.slice(0, 18))
-        bargeIn()
-      } else if (m.type === 'error') {
-        if (m.message && m.message.indexOf('rate limit') >= 0) {
-          setStatus('请求过于频繁，请稍候…', true)
-        } else {
-          setStatus('小P出错了: ' + (m.message || '未知错误'), true)
-        }
-      }
-    }
+    ws.onmessage = onMessage
 
-    ws.onclose = () => {
-      // 主动挂断不提示；异常断开提示可重连
-      if (ui.active) {
+    ws.onclose = (ev) => {
+      // 主动挂断不提示；被互踢（4409）单独提示；异常断开提示可重连
+      if (ev && ev.code === 4409) {
+        ui.active = false
+        setStatus('账号已在其他页面接通', true)
+      } else if (ui.active) {
         setStatus('连接已断开，点击可重连', true)
       }
       cleanupAudio()
@@ -747,10 +792,7 @@ export function useVoiceCall() {
   function cleanupAudio() {
     stopAudio()
     stopAudioStream()
-    V.speaking = false
-    ui.waveOn = false
-    ui.glowOn = false
-    ui.statusInterruptible = false
+    setPhase(PHASE.IDLE)
     if (V.timerInt) {
       clearInterval(V.timerInt)
       V.timerInt = null
