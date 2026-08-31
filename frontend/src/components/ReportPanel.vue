@@ -31,6 +31,9 @@
       </div>
     </div>
 
+    <!-- 无结构化数据（旧会话）：仅展示报告原文，前端不做二次解析（bug #29） -->
+    <div v-if="parsed.raw" class="report-raw">{{ report }}</div>
+
     <!-- 维度评分 -->
     <div v-if="parsed.dimensions.length" class="report-section">
       <div class="section-title">
@@ -83,73 +86,12 @@ const props = defineProps({
 })
 defineEmits(['download'])
 
-const SCORE_RE = /【总分】\s*(\d{1,3})\s*\/\s*100/
 const RADIUS = 52
 const circumference = 2 * Math.PI * RADIUS
-
-const SECTION_KEYWORDS = [
-  { key: 'dim', re: /分项|维度|得分|评分/ },
-  { key: 'weak', re: /薄弱|不足|欠缺|弱点|短板/ },
-  { key: 'improve', re: /改进|建议|提升|优化|行动/ },
-  { key: 'strength', re: /优势|亮点|表现|做得不错|加分/ },
-]
 
 function clamp(n) {
   if (Number.isNaN(n)) return null
   return Math.max(0, Math.min(100, n))
-}
-
-function parseReport(text) {
-  const src = (text || '').replace(/\r\n/g, '\n')
-  const lines = src.split('\n')
-  const m = src.match(SCORE_RE)
-  const score = clamp(m ? parseInt(m[1], 10) : NaN)
-  let section = null
-  const buckets = { dim: [], weak: [], improve: [], strength: [] }
-
-  for (const raw of lines) {
-    const line = raw.trim()
-    if (!line) continue
-
-    const isItem = /^[-*•▪]/.test(line) || /^\d+[.、)]/.test(line)
-    if (!isItem) {
-      // 小节标题行（含关键字的非条目行）
-      const hit = SECTION_KEYWORDS.find((k) => k.re.test(line))
-      if (hit) {
-        section = hit.key
-        continue
-      }
-      // 其余非条目行（如【总分】行、说明文字）直接跳过
-      continue
-    }
-
-    // 条目行：去掉列表符号
-    let item = line.replace(/^[-*•▪]\s*/, '').replace(/^\d+[.、)]\s*/, '').trim()
-    if (!item) continue
-
-    // 维度条目：名称 + 分数（冒号 / 顿号 / 空格分隔）
-    let dm = item.match(/^(.+?)[:：]\s*(\d{1,3})\s*$/)
-    if (!dm) dm = item.match(/^(.+?)\s+(\d{1,3})\s*$/)
-    if (dm) {
-      const s = clamp(parseInt(dm[2], 10))
-      if (s != null) {
-        buckets.dim.push({ label: dm[1].replace(/^#{1,6}\s*/, '').trim(), score: s })
-        continue
-      }
-    }
-
-    // 无数字条目：归入当前小节；未明确小节时默认当作薄弱点
-    const target = section || 'weak'
-    buckets[target].push(item)
-  }
-
-  return {
-    score,
-    dimensions: buckets.dim,
-    weakPoints: buckets.weak,
-    improvements: buckets.improve,
-    strengths: buckets.strength,
-  }
 }
 
 const parsed = computed(() => {
@@ -157,6 +99,7 @@ const parsed = computed(() => {
   // 后端已产出结构化数据时优先使用（避免前端重复解析 markdown）
   if (d && (d.score != null || d.dimensions || d.weak_points || d.improvements)) {
     return {
+      raw: false,
       score: d.score,
       dimensions: (d.dimensions || []).map((x) => ({
         label: x.label,
@@ -167,7 +110,8 @@ const parsed = computed(() => {
       strengths: [],
     }
   }
-  return parseReport(props.report)
+  // 无结构化数据：仅展示原文，前端不再复制一份解析正则（AGENTS 纪律，bug #29）
+  return { raw: true, score: null, dimensions: [], weakPoints: [], improvements: [] }
 })
 const ringOffset = computed(() => {
   if (parsed.value.score == null) return 0
@@ -194,6 +138,18 @@ function dimColor(score) {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+}
+.report-raw {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: #f7f9fd;
+  border: 1px solid #e7ecf4;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #3a4664;
 }
 .report-title-box {
   min-width: 0;

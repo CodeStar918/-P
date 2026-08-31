@@ -128,6 +128,7 @@ async function onSubmit() {
 
 <style scoped>
 .login-wrap {
+  min-height: 100vh; /* 旧浏览器回退（bug #31） */
   min-height: 100dvh;
   display: flex;
   align-items: center;

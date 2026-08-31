@@ -87,7 +87,8 @@
     <!-- 题目列表 + 已选 -->
     <div class="bank-body">
       <div class="qlist">
-        <el-empty v-if="!rows.length" description="暂无匹配的题目" :image-size="80" />
+        <el-empty v-if="loaded && !rows.length" description="暂无匹配的题目" :image-size="80" />
+        <div v-else-if="!loaded" class="qlist-loading" v-loading="true" element-loading-text="加载中…" />
         <div v-for="q in rows" :key="q.id" class="qrow" :class="{ selected: isSelected(q.id) }">
           <div class="qinfo">
             <div class="qtitle-text">{{ q.title }}</div>
@@ -156,6 +157,7 @@ const filters = reactive({
   favoriteOnly: false,
 })
 const rows = ref([])
+const loaded = ref(false) // 首次加载完成前显示 loading 而非"暂无题目"空态（bug #30）
 const favoriteIds = ref(new Set())
 const selected = ref([])
 const form = reactive({ title: '', answer: '', tags: '', difficulty: '中等', company: '' })
@@ -190,6 +192,7 @@ async function load() {
   })
   rows.value = r.items
   favoriteIds.value = new Set(r.favorite_ids)
+  loaded.value = true
 }
 
 watch(
@@ -299,6 +302,7 @@ async function submitImport() {
   flex: 1;
   overflow-y: auto;
   max-height: 52vh;
+  min-height: 160px; /* 首次加载中保持高度，loading 遮罩可见（bug #30） */
   padding-right: 4px;
 }
 .qrow {

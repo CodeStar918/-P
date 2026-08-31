@@ -191,6 +191,8 @@ def get_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute(f"PRAGMA busy_timeout = {config.DB_TIMEOUT_SECONDS * 1000}")
     conn.execute("PRAGMA synchronous = NORMAL")
+    # 外键约束默认关闭，schema 里的 REFERENCES/CASCADE 全部失效（bug #24）
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 

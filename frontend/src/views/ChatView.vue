@@ -33,8 +33,8 @@
     </header>
 
     <div class="chat-layout">
-      <!-- 侧栏：题库统计 + 历史 -->
-      <aside class="chat-side">
+      <!-- 侧栏：题库统计 + 历史（窄屏经 side-toggle 拉出抽屉） -->
+      <aside class="chat-side" :class="{ open: sideOpen }">
         <div class="side-title">题库统计</div>
         <el-row :gutter="8">
           <el-col v-for="s in stats" :key="s.key" :span="12">
@@ -168,7 +168,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, User } from '@element-plus/icons-vue'
+import { ArrowDown, Histogram, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
 import { bankApi, sessionApi } from '../api'
@@ -340,6 +340,8 @@ async function cancelVoice() {
 async function onCommand(cmd) {
   if (cmd === 'logout') {
     await auth.logout()
+    // 重置聊天状态：否则下一账号登录首帧会闪现上一账号的对话/报告（bug #20）
+    chat.$reset()
     router.push('/login')
   } else if (cmd === 'profile') {
     profile.nickname = auth.user?.nickname || ''
@@ -360,6 +362,7 @@ async function saveProfile() {
 .chat-page {
   display: flex;
   flex-direction: column;
+  height: 100vh; /* 旧浏览器回退（Safari <15.4 不支持 dvh，bug #31） */
   height: 100dvh;
   max-width: 1180px;
   margin: 0 auto;
@@ -509,6 +512,22 @@ async function saveProfile() {
 @media (max-width: 820px) {
   .chat-side {
     display: none;
+  }
+  /* 窄屏抽屉：经 header 的"历史"按钮拉出（bug #30） */
+  .chat-side.open {
+    display: flex;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 78%;
+    max-width: 320px;
+    z-index: 40;
+    overflow-y: auto;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+  }
+  .side-toggle {
+    display: inline-flex;
   }
   .chat-page {
     padding: 0 8px;
