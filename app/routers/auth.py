@@ -68,6 +68,19 @@ def logout(authorization: str | None = Header(default=None)) -> dict:
     return {"ok": True}
 
 
+@router.post("/ws-ticket")
+def ws_ticket(
+    user_row=auth.CurrentUser, _rate: None = Depends(rate_limit(limit=30, window=60))
+) -> dict:
+    """签发语音 WS 一次性连接票据（bug #23）。
+
+    浏览器 new WebSocket() 无法携带请求头，改为前端持 Bearer 令牌先换一张
+    短时（WS_TICKET_TTL_SECONDS）一次性票据，WS URL 只出现票据；
+    长效令牌不再进入 URL（避免落入访问日志/代理/浏览器历史）。
+    """
+    return {"ticket": auth.issue_ws_ticket(user_row["id"])}
+
+
 @router.get("/me")
 def me(user_row=auth.CurrentUser) -> dict:
     """返回当前登录用户信息。"""

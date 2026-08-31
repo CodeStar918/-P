@@ -13,11 +13,13 @@ from unittest import mock
 
 from app import auth, config, db
 from app.agent.coach import InterviewSession
+from app.ratelimit import reset_rate_limits
 from app.tts import TtsState, _cosyvoice_synthesize
 from app.tts import synthesize as _synthesize
 from app.voice_server import app, health
 from app.voice_ws import maybe_switch_to_mock
 from fastapi.testclient import TestClient
+from fastapi.websockets import WebSocketDisconnect
 
 
 def _test_token() -> str:
@@ -78,10 +80,31 @@ class VoiceServerTests(unittest.TestCase):
         self._db_patch.start()
         db.init_db()
         self.token = _test_token()
+        # ws-ticket 签发接口与注册/登录共享进程级限流桶，测试间清空防串扰
+        reset_rate_limits()
 
     def tearDown(self):
         self._db_patch.stop()
+        reset_rate_limits()
         self._tmpdir.cleanup()
+
+    def _ws_url(self, client) -> str:
+        """经 REST 用 Bearer 令牌换取一次性票据，返回新协议 WS 连接地址（bug #23）。
+
+        每次调用签发新票据（单次消费），多连接场景各自独立取票。
+        """
+        r = client.post("/api/auth/ws-ticket", headers={"Authorization": f"Bearer {self.token}"})
+        self.assertEqual(r.status_code, 200)
+        return f"/ws/voice?ticket={r.json()['ticket']}"
+
+    def test_old_token_query_param_rejected(self):
+        """回归断言：旧协议 ?token= 携带有效令牌也必须被拒（bug #23 防旧协议回归）。"""
+        with (
+            TestClient(app) as client,
+            self.assertRaises(WebSocketDisconnect),
+            client.websocket_connect(f"/ws/voice?token={self.token}"),
+        ):
+            pass
 
     def test_maybe_switch_to_mock_on_first_message(self):
         s = InterviewSession("coach")
@@ -110,7 +133,7 @@ class VoiceServerTests(unittest.TestCase):
         with (
             TestClient(app) as client,
             mock.patch("app.tts.synthesize", side_effect=_fake_synth),
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             # 接通后先收到开场白（像打电话一样），消化完再提问
             greeting_deltas, *_ = _recv_until_done(ws)
@@ -142,7 +165,7 @@ class VoiceServerTests(unittest.TestCase):
             TestClient(app) as client,
             mock.patch("app.tts.synthesize", side_effect=fail_once),
             mock.patch("app.tts.TTS_MAX_CONCURRENCY", 1),  # 串行：保证降级判定确定
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白（同样走降级，不计数）
             ws.send_text(json.dumps({"type": "text", "content": "你好"}, ensure_ascii=False))
@@ -168,7 +191,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.tts.edge_tts", SimpleNamespace(Communicate=FakeComm)),
             mock.patch("app.tts.config.VOICE_TTS", "edge"),
             TestClient(app) as client,
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白
             first_sid = None
@@ -216,7 +239,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.tts._circuit_open", return_value=False),
             mock.patch("app.tts.TTS_MAX_CONCURRENCY", 1),  # 串行：保证断言确定
             TestClient(app) as client,
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白（同样中途失败，先清空）
             ws.send_text(json.dumps({"type": "text", "content": "你好"}, ensure_ascii=False))
@@ -254,7 +277,7 @@ class VoiceServerTests(unittest.TestCase):
         with (
             mock.patch("app.tts.synthesize", side_effect=fake_synth),
             TestClient(app) as client,
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白
             calls.clear()
@@ -283,7 +306,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.tts.TTS_FIRST_CHARS", 1),
             mock.patch("app.tts.TTS_CHUNK_CHARS", 1),
             TestClient(app) as client,
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白
             calls.clear()
@@ -382,7 +405,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.tts.config.DASHSCOPE_API_KEY", "sk-test"),
             mock.patch("app.tts._cosyvoice_synthesize", return_value=FAKE_AUDIO),
             TestClient(app) as client,
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白（同样走 CosyVoice 路径）
             ws.send_text(json.dumps({"type": "text", "content": "你好"}, ensure_ascii=False))
@@ -461,7 +484,7 @@ class VoiceServerTests(unittest.TestCase):
         with (
             TestClient(app) as client,
             mock.patch("app.tts.synthesize", side_effect=recording_synth),
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)
         self.assertEqual(len(calls), 1, "开场白应整段一次合成")
@@ -516,7 +539,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.agent.llm.chat_stream", side_effect=fake_stream),
             TestClient(app) as client,
             mock.patch("app.tts.synthesize", side_effect=_fake_synth),
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             greeting_deltas, *_ = _recv_until_done(ws)
             ws.send_text(json.dumps({"type": "text", "content": "我叫张三"}, ensure_ascii=False))
@@ -692,7 +715,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.tts.synthesize", side_effect=_fake_synth),
             mock.patch("app.voice_ws.DashScopeASR", FakeASR),
             mock.patch("app.voice_ws.ASR_RETRY_DELAY", 0.05),
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白
             # asr_start：处理器首次启动失败 → asr_error，监督任务接管
@@ -736,7 +759,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.tts.synthesize", side_effect=_fake_synth),
             mock.patch("app.voice_ws.DashScopeASR", FakeASR),
             mock.patch("app.voice_ws.ASR_RETRY_DELAY", 0.05),
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白
             ws.send_text(json.dumps({"type": "asr_start", "sample_rate": 16000}))
@@ -762,14 +785,14 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.agent.llm.chat_stream", side_effect=fake_stream),
             mock.patch("app.tts.synthesize", side_effect=_fake_synth),
         ):
-            with client.websocket_connect(f"/ws/voice?token={self.token}") as ws:
+            with client.websocket_connect(self._ws_url(client)) as ws:
                 greeting1, *_ = _recv_until_done(ws)
                 ws.send_text(
                     json.dumps({"type": "text", "content": "第一个问题"}, ensure_ascii=False)
                 )
                 _recv_until_done(ws)
             self.assertEqual(seen["user_msgs"], 1)
-            with client.websocket_connect(f"/ws/voice?token={self.token}") as ws2:
+            with client.websocket_connect(self._ws_url(client)) as ws2:
                 greeting2, *_ = _recv_until_done(ws2)
                 ws2.send_text(
                     json.dumps({"type": "text", "content": "第二个问题"}, ensure_ascii=False)
@@ -826,7 +849,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.config.VOICE_TEXT_RATE_WINDOW", 60),
         ):
             reset_rate_limits()
-            with client.websocket_connect(f"/ws/voice?token={self.token}") as ws:
+            with client.websocket_connect(self._ws_url(client)) as ws:
                 _recv_until_done(ws)  # 消化开场白（不计入 text 限流）
                 for _ in range(2):
                     ws.send_text(
@@ -850,9 +873,9 @@ class VoiceServerTests(unittest.TestCase):
 
         # 嵌套 with 是必要的：ws1 必须保持打开，才能验证 ws2 接通时被踢
         with TestClient(app) as client:  # noqa: SIM117
-            with client.websocket_connect(f"/ws/voice?token={self.token}") as ws1:
+            with client.websocket_connect(self._ws_url(client)) as ws1:
                 _recv_until_done(ws1)  # 消化开场白
-                with client.websocket_connect(f"/ws/voice?token={self.token}") as ws2:
+                with client.websocket_connect(self._ws_url(client)) as ws2:
                     _recv_until_done(ws2)  # 新连接正常接通
                 # 旧连接应已被服务端关闭（4409 互踢）
                 with self.assertRaises(WebSocketDisconnect):
@@ -877,7 +900,7 @@ class VoiceServerTests(unittest.TestCase):
             TestClient(app) as client,
             mock.patch("app.agent.llm.chat_stream", side_effect=slow_stream),
             mock.patch("app.tts.synthesize", side_effect=_fake_synth),
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             try:
                 _recv_until_done(ws)  # 消化开场白
@@ -929,7 +952,7 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.tts.synthesize", side_effect=slow_first),
             mock.patch("app.tts.TTS_FIRST_CHARS", 1),
             mock.patch("app.tts.TTS_CHUNK_CHARS", 1),
-            client.websocket_connect(f"/ws/voice?token={self.token}") as ws,
+            client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白
             synth_order.clear()

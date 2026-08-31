@@ -8,6 +8,8 @@ export const authApi = {
   logout: () => http.post('/api/auth/logout'),
   me: () => http.get('/api/auth/me'),
   updateMe: (data) => http.put('/api/auth/me', data),
+  // 语音 WS 一次性连接票据：长效令牌不出 Bearer 头，URL 只带短时票据（bug #23）
+  createWsTicket: () => http.post('/api/auth/ws-ticket'),
 }
 
 // ---- 会话 / 聊天 ----

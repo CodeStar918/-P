@@ -11,8 +11,7 @@
 // - 音频采集：AudioWorklet 优先（ScriptProcessor 已废弃），失败回退 ScriptProcessor；
 //   上行音频为二进制帧（Int16 LE PCM），控制消息仍为 JSON 文本帧。
 import { onUnmounted, reactive } from 'vue'
-import { configApi, customApi } from '../../api'
-import { getToken } from '../../api/http'
+import { authApi, configApi, customApi } from '../../api'
 import { MOCK_START_RE, base64ToBytes, calcRms, echoMatch, normalizeForEcho } from './voiceUtils'
 import workletUrl from './pcm-worklet.js?url'
 
@@ -736,8 +735,23 @@ export function useVoiceCall() {
     }
   }
 
-  function connect() {
+  async function connect() {
     if (ui.active) return
+    // 先置接通状态防取票期间重入；失败路径各自复位
+    ui.active = true
+    setPhase(PHASE.CONNECTING)
+    setStatus('正在接通…', true)
+    // 长效令牌不出 Bearer 头：先经 REST 换一次性短时票据，URL 只带 ticket（bug #23）
+    let ticket
+    try {
+      ticket = (await authApi.createWsTicket()).ticket
+    } catch (e) {
+      // 401 已由 http 拦截器统一处理（跳登录）；其余网络错误就地提示
+      ui.active = false
+      setPhase(PHASE.IDLE)
+      setStatus('接通失败，请重试', true)
+      return
+    }
     ensureAudio()
     try {
       window.speechSynthesis.getVoices()
@@ -745,11 +759,8 @@ export function useVoiceCall() {
       /* 忽略 */
     }
     const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://'
-    const token = getToken()
-    const url = proto + window.location.host + '/ws/voice?token=' + encodeURIComponent(token)
-    ui.active = true
-    setPhase(PHASE.CONNECTING)
-    setStatus('正在接通…', true)
+    const url =
+      proto + window.location.host + '/ws/voice?ticket=' + encodeURIComponent(ticket)
     let ws
     try {
       ws = new WebSocket(url)
