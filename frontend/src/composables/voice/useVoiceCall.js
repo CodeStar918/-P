@@ -286,54 +286,6 @@ export function useVoiceCall() {
     ui.micLevel = 0
   }
 
-  // 麦克风测试：录 2 秒并回放
-  function micTest() {
-    if (!V.mic) {
-      setStatus('麦克风未启动，请先点「接通」', true)
-      return
-    }
-    const ctx = V.audioCtx
-    if (!ctx) return
-    const rec = []
-    const started = Date.now()
-    const src = ctx.createMediaStreamSource(V.mic)
-    const proc = ctx.createScriptProcessor(4096, 1, 1)
-    const g = ctx.createGain()
-    g.gain.value = 0
-    proc.connect(g)
-    g.connect(ctx.destination)
-    src.connect(proc)
-    proc.onaudioprocess = (e) => {
-      const t = e.inputBuffer.getChannelData(0)
-      for (let i = 0; i < t.length; i++) rec.push(t[i])
-      if (Date.now() - started >= 2000) {
-        try {
-          src.disconnect()
-          proc.disconnect()
-        } catch (err) {
-          /* 忽略 */
-        }
-        playRecorded(rec, ctx.sampleRate)
-      }
-    }
-    setStatus('正在录音 2 秒…，请对着麦克风说话', true)
-  }
-
-  function playRecorded(samples, sr) {
-    try {
-      const ctx = V.audioCtx
-      const buf = ctx.createBuffer(1, samples.length, sr)
-      buf.copyToChannel(new Float32Array(samples), 0)
-      const s = ctx.createBufferSource()
-      s.buffer = buf
-      s.connect(ctx.destination)
-      s.start()
-      setStatus('已回放你的声音（约 2 秒）')
-    } catch (e) {
-      setStatus('回放失败: ' + e, true)
-    }
-  }
-
   // 音量打断（兜底）：ASR 静默超 1.5s 时启用（实际由内容级打断承担主防线）
   function vadCheck(rms) {
     if (V.lastAsrEvent && Date.now() - V.lastAsrEvent < 1500) return
@@ -843,7 +795,6 @@ export function useVoiceCall() {
     ui,
     connect,
     disconnect,
-    micTest,
     onStatusClick,
     fetchCustomStatus,
   }
