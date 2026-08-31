@@ -17,8 +17,9 @@ class RegisterBody(BaseModel):
 
 
 class LoginBody(BaseModel):
-    username: str
-    password: str
+    # 只限长不限短（老账号兼容），防超大 body 进 pbkdf2/日志（bug #25）
+    username: str = Field(max_length=32)
+    password: str = Field(max_length=128)
 
 
 class ProfileBody(BaseModel):
@@ -75,8 +76,12 @@ def me(user_row=auth.CurrentUser) -> dict:
 
 @router.put("/me")
 def update_me(body: ProfileBody, user_row=auth.CurrentUser) -> dict:
-    """更新昵称/默认人格。"""
+    """更新昵称/默认人格。
+
+    nickname 显式传入（含空串=清空，回退显示用户名，bug #26）才更新；
+    未传字段保持不动。
+    """
     db.update_user_persona(user_row["id"], body.persona)
-    if body.nickname.strip():
+    if "nickname" in body.model_fields_set:
         db.update_user_nickname(user_row["id"], body.nickname.strip())
     return auth.public_user(db.get_user_by_id(user_row["id"]))

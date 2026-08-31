@@ -422,6 +422,8 @@ class InterviewSession:
         # 1) 开场：用户自我介绍后 → 出第一题
         if self.turn == "greeting":
             self.turn = "answering"
+            # 自我介绍进 LLM 上下文：否则"项目深挖"阶段无项目信息可挖（bug #28）
+            self.messages.append({"role": "user", "content": f"（自我介绍）{user_text}"})
             return self._ask_next_question()
 
         # 2) 用户在答题 → 点评 + 追问
@@ -479,6 +481,8 @@ class InterviewSession:
     def _handle_mock_stream(self, user_text: str):
         if self.turn == "greeting":
             self.turn = "answering"
+            # 自我介绍进 LLM 上下文：否则"项目深挖"阶段无项目信息可挖（bug #28）
+            self.messages.append({"role": "user", "content": f"（自我介绍）{user_text}"})
             return (yield from self._ask_next_question_stream())
 
         if self.turn == "answering":
@@ -556,6 +560,10 @@ class InterviewSession:
                 return (yield from self._finish_report_stream())
             return (yield from self._ask_next_question_stream())
 
+        # 4) 报告已出：追加 hint 进上下文与展示历史，否则 session.py 会把
+        # messages[-1]（仍是报告全文）重复追加一遍（bug #27）
+        self.messages.append({"role": "user", "content": user_text})
+        self.messages.append({"role": "assistant", "content": FINISHED_HINT})
         yield FINISHED_HINT
         return FINISHED_HINT
 

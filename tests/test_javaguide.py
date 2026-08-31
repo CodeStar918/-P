@@ -36,7 +36,10 @@ class JavaGuideTests(unittest.TestCase):
         # 两个问题被解析；「参考资料」被过滤
         self.assertEqual(len(rows), 2)
         r = rows[0]
-        self.assertEqual(r["source_id"], "java-basic-01:1")
+        # bug #31：source_id 改为标题哈希（稳定标识，不随页内位置偏移）
+        self.assertEqual(
+            r["source_id"], javaguide._stable_source_id("java-basic-01", "JVM vs JDK vs JRE")
+        )
         self.assertEqual(r["title"], "JVM vs JDK vs JRE")  # ⟪⟫ 前缀被清理
         self.assertIn("JVM 是 Java 虚拟机", r["answer"])
         self.assertEqual(r["tags"], ["Java"])

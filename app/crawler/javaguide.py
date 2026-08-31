@@ -8,6 +8,7 @@
 网络不佳时整页超时/失败只告警，不影响其他源。
 """
 
+import hashlib
 import logging
 import re
 
@@ -70,6 +71,11 @@ _SKIP_TITLES = ("参考资料", "总结", "参考", "目录", "结语", "写在�
 _ANSWER_MAX = 4000
 
 
+def _stable_source_id(topic: str, title: str) -> str:
+    """按标题哈希生成稳定 source_id：页内序号在源页中部插题后会集体偏移（bug #31）。"""
+    return f"{topic}:{hashlib.sha1(title.encode('utf-8')).hexdigest()[:12]}"
+
+
 class JavaGuideAdapter(SourceAdapter):
     """JavaGuide 面试指南（中文，Java/后端通用面试题，量大、稳定、服务端渲染）。"""
 
@@ -110,7 +116,8 @@ class JavaGuideAdapter(SourceAdapter):
                 continue
             rows.append(
                 {
-                    "source_id": f"{topic}:{len(rows) + 1}",
+                    # 稳定标识见 _stable_source_id；去重由 content_hash(title) 保证
+                    "source_id": _stable_source_id(topic, title),
                     "title": title,
                     "content": None,
                     "answer": answer,

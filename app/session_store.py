@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 
 import app.db as db
-from app.agent.coach import InterviewSession
+from app.agent.coach import FINISHED_HINT, InterviewSession
 
 logger = logging.getLogger("interview_coach.session_store")
 
@@ -66,13 +66,23 @@ def save_session(user_id: int, session: InterviewSession) -> None:
     if session.finished and session.mode == "mock":
         from app.agent.coach import _extract_weak_points, _report_score
 
-        score = _report_score(session.messages[-1]["content"]) if session.messages else None
-        weak = _extract_weak_points(session.messages[-1]["content"]) if session.messages else None
+        # 报告取"最后一条非 FINISHED_HINT 的 assistant 消息"：报告出来后再发言，
+        # messages[-1] 是 hint，直接取会覆盖掉真报告（bug #27）
+        report_msg = next(
+            (
+                m
+                for m in reversed(session.messages)
+                if m.get("role") == "assistant" and m.get("content") != FINISHED_HINT
+            ),
+            None,
+        )
+        score = _report_score(report_msg["content"]) if report_msg else None
+        weak = _extract_weak_points(report_msg["content"]) if report_msg else None
         db.update_session_state(
             sid,
             state,
             score=score,
-            report=session.messages[-1]["content"] if session.messages else None,
+            report=report_msg["content"] if report_msg else None,
             weak_points=weak,
             status="done",  # 完成的会话归档，否则 active 行永不完结（bug #3）
         )

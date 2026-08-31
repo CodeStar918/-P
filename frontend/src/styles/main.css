@@ -418,6 +418,7 @@ body {
   padding: 7px 18px;
   border-radius: 999px;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px); /* Safari ≤17 前缀（bug #31） */
 }
 .vstatus.busy {
   color: #ffd166;
@@ -440,16 +441,18 @@ body {
   text-align: center;
 }
 .vmicrow {
-  display: none;
+  /* 接通前也显示（麦克风电平条为空）："测试"按钮定位就是接通前预检（bug #30） */
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   margin-top: 10px;
   font-size: 12px;
   color: #9fb2d9;
+  opacity: 0.7;
 }
 .vmicrow.on {
-  display: flex;
+  opacity: 1;
 }
 .vmicbar {
   width: 130px;
@@ -563,6 +566,7 @@ body {
   color: #eef2fb;
   border-bottom-left-radius: 4px;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px); /* Safari ≤17 前缀（bug #31） */
 }
 .vbubble.hint {
   align-self: center;

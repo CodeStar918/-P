@@ -90,11 +90,14 @@ def add_question(body: AddQuestionBody, user_row=auth.CurrentUser) -> dict:
     title = body.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="题干不能为空")
+    # 标签清洗：去空白、剔除含逗号的条目（tags 列按逗号分隔，混入会污染筛选）、
+    # 限制条数与单条长度（bug #25）
+    tags = [t.strip() for t in (body.tags or []) if t.strip() and "," not in t][:10]
     db.upsert_question(
         source="custom",
         title=title,
         answer=body.answer.strip() or None,
-        tags=body.tags or None,
+        tags=tags or None,
         difficulty=body.difficulty,
         company=body.company.strip() or None,
     )
@@ -124,6 +127,9 @@ def favorites(user_row=auth.CurrentUser) -> dict:
 
 @router.post("/favorites/{qid}")
 def add_favorite(qid: int, user_row=auth.CurrentUser) -> dict:
+    # 题目存在性校验：FK 约束开启前已有的防御层，防止幽灵收藏（bug #24）
+    if db.get_question_by_id(qid) is None:
+        raise HTTPException(status_code=404, detail="题目不存在")
     db.add_favorite(qid, user_id=user_row["id"])
     return {"ok": True}
 

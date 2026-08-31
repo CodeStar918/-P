@@ -212,9 +212,114 @@ class ParserHeadingTests(unittest.TestCase):
         self.assertIn("索引薄弱点", weak)
 
 
-def _mojibake(text: str) -> str:
-    """按真实故障路径构造乱码样本：UTF-8 字节被按 latin-1 误解码。"""
-    return text.encode("utf-8").decode("latin-1")
+class P3TailTests(unittest.TestCase):
+    """P3 尾巴批次：#24/#25/#26/#27/#28/#31。"""
+
+    def setUp(self):
+        _isolate_rate_limit()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self._patch = mock.patch.object(config, "DB_PATH", Path(self._tmpdir.name) / "p3.db")
+        self._patch.start()
+        db.init_db()
+        self.client = TestClient(app)
+        r = self.client.post(
+            "/api/auth/register",
+            json={"username": "p3user", "password": "pass123456", "nickname": "老昵称"},
+        )
+        self.token = r.json()["token"]
+        self.hdr = {"Authorization": f"Bearer {self.token}"}
+
+    def tearDown(self):
+        self._patch.stop()
+        _isolate_rate_limit()
+        self._tmpdir.cleanup()
+
+    def test_foreign_keys_on_and_ghost_favorite_404(self):
+        """bug #24：FK 开启 + 收藏不存在的题目返回 404，不再产生幽灵收藏。"""
+        conn = db.get_conn()
+        try:
+            self.assertEqual(conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
+        finally:
+            conn.close()
+        resp = self.client.post("/api/favorites/999999999", headers=self.hdr)
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(self.client.get("/api/favorites", headers=self.hdr).json()["ids"], [])
+
+    def test_login_body_length_capped(self):
+        """bug #25a：登录用户名/密码超长 422。"""
+        resp = self.client.post(
+            "/api/auth/login", json={"username": "x" * 100, "password": "y" * 200}
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_add_question_tags_sanitized(self):
+        """bug #25b：含逗号/空白的标签被清洗，不污染标签体系。"""
+        self.client.post(
+            "/api/questions",
+            json={"title": "测试题", "tags": ["  Redis ", "a,b", "  ", "缓存"]},
+            headers=self.hdr,
+        )
+        names = {
+            t["name"]
+            for t in self.client.get("/api/questions/meta", headers=self.hdr).json()["tags"]
+        }
+        self.assertIn("Redis", names)
+        self.assertIn("缓存", names)
+        self.assertNotIn("a,b", names)
+
+    def test_nickname_can_be_cleared(self):
+        """bug #26：显式传空昵称可清空；不传 nickname 字段则保持不变。"""
+        me = self.client.put(
+            "/api/auth/me", json={"nickname": "", "persona": ""}, headers=self.hdr
+        ).json()
+        self.assertNotEqual(me.get("nickname"), "老昵称")
+        # 不传 nickname：persona 更新、昵称保持清空后的状态
+        me2 = self.client.put("/api/auth/me", json={"persona": "严肃"}, headers=self.hdr).json()
+        self.assertNotEqual(me2.get("nickname"), "老昵称")
+        self.assertEqual(me2.get("persona"), "严肃")
+
+    def test_finished_session_hint_no_report_dup(self):
+        """bug #27：报告出来后再发言，展示与持久化不再重复/覆盖报告。"""
+        import app.session_store as session_store
+
+        uid = 616161
+        s = InterviewSession("mock", user_id=uid)
+        s.turn = "report"
+        s.finished = True
+        s.answers = [{"stage": "基础", "title": "Q1", "answer": "A1"}]
+        s.messages = [{"role": "assistant", "content": _REPORT_TEXT}]
+        session_store.start_session(uid, s)
+        from app.agent.coach import FINISHED_HINT
+
+        outs = list(s.handle_stream("谢谢，再见"))
+        self.assertEqual("".join(outs), FINISHED_HINT)
+        self.assertEqual(s.messages[-1]["content"], FINISHED_HINT, "hint 应进上下文")
+        session_store.save_session(uid, s)
+        row = db.list_sessions_by_user(uid)[0]
+        self.assertIn("总分", row["report"], "真报告不应被 hint 覆盖")
+
+    def test_greeting_intro_enters_llm_context(self):
+        """bug #28：开场自我介绍进 LLM 上下文。"""
+        s = InterviewSession("mock")
+        with (
+            mock.patch(
+                "app.agent.coach._pick_question",
+                return_value={"id": 3, "title": "T", "difficulty": "中"},
+            ),
+            mock.patch.object(s, "_chat_stream", return_value=iter(["第一题：…"])),
+        ):
+            list(s.handle_stream("我叫张三，三年后端经验"))
+        joined = "".join(m["content"] for m in s.messages)
+        self.assertIn("我叫张三", joined)
+
+    def test_stable_source_id(self):
+        """bug #31：javaguide source_id 按标题哈希，不随页内位置偏移。"""
+        from app.crawler.javaguide import _stable_source_id
+
+        a = _stable_source_id("topic", "同一道题")
+        self.assertEqual(a, _stable_source_id("topic", "同一道题"))
+        self.assertTrue(a.startswith("topic:"))
+        self.assertNotEqual(a, _stable_source_id("topic", "另一道题"))
 
 
 class WalModeTests(unittest.TestCase):
