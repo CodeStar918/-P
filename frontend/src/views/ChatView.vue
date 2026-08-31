@@ -16,6 +16,11 @@
           <el-icon><Collection /></el-icon>
           题库
         </el-button>
+        <!-- 窄屏抽屉入口：仅 @media(max-width:820px) 时显示 -->
+        <el-button size="small" text class="side-toggle" @click="sideOpen = !sideOpen">
+          <el-icon><Histogram /></el-icon>
+          历史
+        </el-button>
         <el-dropdown trigger="click" @command="onCommand">
           <span class="user-chip">
             <el-icon><User /></el-icon>
@@ -31,6 +36,9 @@
         </el-dropdown>
       </div>
     </header>
+
+    <!-- 窄屏抽屉遮罩：点击关闭 -->
+    <div v-if="sideOpen" class="side-mask" @click="sideOpen = false"></div>
 
     <div class="chat-layout">
       <!-- 侧栏：题库统计 + 历史（窄屏经 side-toggle 拉出抽屉） -->
@@ -50,11 +58,11 @@
         </el-button>
 
         <div class="side-title" style="margin-top: 18px">历史记录</div>
-        <div v-if="!history.length" class="side-note">暂无面试记录</div>
+        <div v-if="!history.length" class="side-note">还没有面试记录，来一场热身吧</div>
         <div v-for="h in history" :key="h.id" class="rev-row">
           <span>{{ h.job_title || (h.mode === 'mock' ? '模拟面试' : '辅导答疑') }}</span>
           <span class="rev-meta">{{ fmtDate(h.started_at) }}</span>
-          <span v-if="h.score != null" class="rev-score">{{ h.score }}</span>
+          <span v-if="h.score != null" class="rev-score" :class="scoreTone(h.score)">{{ h.score }}</span>
         </div>
 
         <div class="side-note">数据按账号隔离 · 收藏/历史云端同步</div>
@@ -188,6 +196,7 @@ const scrollRef = ref(null)
 const bankVisible = ref(false)
 const customVisible = ref(false)
 const profileVisible = ref(false)
+const sideOpen = ref(false) // 窄屏侧栏抽屉开关
 const profile = reactive({ nickname: '', persona: '' })
 
 const persona = computed({
@@ -210,6 +219,14 @@ function fmtDate(iso) {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(
     d.getMinutes(),
   ).padStart(2, '0')}`
+}
+
+// 历史分数徽章档位：≥80 优秀(绿) / ≥60 及格(琥珀) / <60 待提升(砖红)
+function scoreTone(s) {
+  if (s == null) return ''
+  if (s >= 80) return 'good'
+  if (s >= 60) return 'mid'
+  return 'low'
 }
 
 async function loadStats() {
@@ -385,15 +402,15 @@ async function saveProfile() {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #56637a;
+  color: var(--text);
   cursor: pointer;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid #e2e8f2;
+  border: 1px solid var(--border);
   background: #fff;
 }
 .user-chip:hover {
-  border-color: #9db2e8;
+  border-color: var(--brand-light);
   color: var(--brand);
 }
 .bank-btn {
@@ -409,8 +426,8 @@ async function saveProfile() {
   width: 220px;
   flex: 0 0 220px;
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid #e7ecf4;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 16px 14px;
 }
@@ -423,10 +440,11 @@ async function saveProfile() {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid #e7ecf4;
+  background: #fff;
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px 18px 16px;
+  box-shadow: var(--shadow-card);
 }
 .persona-row {
   display: flex;
@@ -445,12 +463,12 @@ async function saveProfile() {
 }
 .persona-label {
   font-size: 13px;
-  color: #7b879c;
+  color: var(--muted);
   white-space: nowrap;
 }
 .mode-chip {
   font-size: 13px;
-  color: #7b879c;
+  color: var(--muted);
   letter-spacing: 0.4px;
 }
 .voice-ready-row {
@@ -474,7 +492,7 @@ async function saveProfile() {
   align-items: flex-end;
   flex: 0 0 auto;
   padding-top: 10px;
-  border-top: 1px solid #eef1f7;
+  border-top: 1px solid var(--border);
 }
 .chat-input-bar :deep(.el-textarea) {
   flex: 1;
@@ -509,6 +527,10 @@ async function saveProfile() {
   box-shadow: 0 6px 24px rgba(var(--brand-rgb), 0.5);
 }
 
+.side-toggle {
+  display: none; /* 仅在窄屏 @media 显示 */
+}
+
 @media (max-width: 820px) {
   .chat-side {
     display: none;
@@ -524,10 +546,19 @@ async function saveProfile() {
     max-width: 320px;
     z-index: 40;
     overflow-y: auto;
-    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-float);
+  }
+  /* 抽屉遮罩：置于抽屉下方 */
+  .side-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgba(43, 38, 30, 0.32);
   }
   .side-toggle {
     display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
   .chat-page {
     padding: 0 8px;

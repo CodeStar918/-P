@@ -49,7 +49,7 @@ const PERSONAS = {
 }
 .persona-desc {
   font-size: 11px;
-  color: #8a95aa;
+  color: var(--muted);
   margin-top: 1px;
 }
 </style>

@@ -137,11 +137,11 @@ async function onSubmit() {
 }
 .login-card {
   width: min(400px, 100%);
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #e7edf6;
+  background: #fff;
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 30px 30px 22px;
-  box-shadow: 0 12px 40px rgba(31, 58, 102, 0.1);
+  box-shadow: var(--shadow-float);
 }
 .login-tabs {
   margin-top: 18px;
@@ -149,12 +149,13 @@ async function onSubmit() {
 .login-btn {
   width: 100%;
   margin-top: 4px;
+  min-height: 40px; /* 触控基准高度（规范 §9.2） */
   border-radius: 10px;
 }
 .login-tip {
   margin-top: 14px;
   font-size: 12px;
-  color: #8a95aa;
+  color: var(--muted);
   text-align: center;
 }
 </style>

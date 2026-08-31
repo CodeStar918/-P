@@ -87,8 +87,10 @@
     <!-- 题目列表 + 已选 -->
     <div class="bank-body">
       <div class="qlist">
-        <el-empty v-if="loaded && !rows.length" description="暂无匹配的题目" :image-size="80" />
-        <div v-else-if="!loaded" class="qlist-loading" v-loading="true" element-loading-text="加载中…" />
+        <el-empty v-if="loaded && !rows.length" description="没有找到匹配的题，换个关键词或筛选条件试试～" :image-size="80" />
+        <div v-else-if="!loaded" class="skeleton">
+          <div v-for="i in 4" :key="i" class="skeleton-row"></div>
+        </div>
         <div v-for="q in rows" :key="q.id" class="qrow" :class="{ selected: isSelected(q.id) }">
           <div class="qinfo">
             <div class="qtitle-text">{{ q.title }}</div>
@@ -106,7 +108,7 @@
             >
               {{ isSelected(q.id) ? '✓ 已加入' : '加入面试' }}
             </el-button>
-            <el-button size="small" :type="isFav(q.id) ? 'warning' : 'default'" @click="toggleFav(q)">
+            <el-button size="small" :type="isFav(q.id) ? 'warning' : 'default'" class="fav-btn" @click="toggleFav(q)">
               {{ isFav(q.id) ? '★ 已收藏' : '☆ 收藏' }}
             </el-button>
           </div>
@@ -225,9 +227,11 @@ async function toggleFav(q) {
   if (favoriteIds.value.has(q.id)) {
     await bankApi.removeFavorite(q.id)
     favoriteIds.value.delete(q.id)
+    ElMessage.success('已取消收藏')
   } else {
     await bankApi.addFavorite(q.id)
     favoriteIds.value.add(q.id)
+    ElMessage.success(`已收藏「${q.title.slice(0, 12)}」`)
   }
 }
 
@@ -305,11 +309,42 @@ async function submitImport() {
   min-height: 160px; /* 首次加载中保持高度，loading 遮罩可见（bug #30） */
   padding-right: 4px;
 }
+/* 骨架屏：题库加载占位 */
+.skeleton {
+  padding-right: 4px;
+}
+.skeleton-row {
+  height: 58px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: linear-gradient(90deg, var(--surface) 25%, #faf3e8 37%, var(--surface) 63%);
+  background-size: 400% 100%;
+  animation: sk 1.2s ease infinite;
+  margin-bottom: 8px;
+}
+@keyframes sk {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+/* 收藏星：已收藏琥珀、hover 放大 */
+.fav-btn {
+  transition: transform 0.15s ease;
+}
+.qrow:hover .fav-btn:not(.is-warning) {
+  transform: scale(1.06);
+}
+.fav-btn.is-warning {
+  font-weight: 600;
+}
 .qrow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid #eef1f7;
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 10px;
   margin-bottom: 8px;
@@ -317,7 +352,7 @@ async function submitImport() {
   background: #fff;
 }
 .qrow.selected {
-  background: #eef2ff;
+  background: #f9e6d8;
   border-left: 3px solid var(--brand);
 }
 .qinfo {
@@ -338,7 +373,7 @@ async function submitImport() {
 }
 .qcompany {
   font-size: 12px;
-  color: #8a95aa;
+  color: var(--muted);
 }
 .qops {
   display: flex;
@@ -347,10 +382,10 @@ async function submitImport() {
 }
 .qsel {
   flex: 0 0 260px;
-  border: 1px solid #e7edf6;
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px;
-  background: #fafcff;
+  background: var(--surface);
   max-height: 52vh;
   overflow-y: auto;
 }
@@ -367,7 +402,7 @@ async function submitImport() {
   font-size: 13px;
 }
 .sel-idx {
-  color: #8a95aa;
+  color: var(--muted);
 }
 .sel-title-text {
   flex: 1;
@@ -378,5 +413,22 @@ async function submitImport() {
 .sel-start {
   width: 100%;
   margin-top: 10px;
+}
+
+/* 窄屏：筛选列改单列、题目/已选面板纵向堆叠、qsel 全宽 */
+@media (max-width: 600px) {
+  .filters :deep(.el-col) {
+    width: 100%;
+    flex: none;
+    max-width: 100%;
+  }
+  .bank-body {
+    flex-direction: column;
+  }
+  .qsel {
+    flex: none;
+    width: 100%;
+    max-height: 220px;
+  }
 }
 </style>
