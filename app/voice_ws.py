@@ -3,7 +3,8 @@
 职责：连接生命周期（认证、单用户互踢、会话恢复、ASR 管理、消息分发、
 文本限流）与回复生成（LLM 流式 + TTS 推送，支持 barge-in 取消）。
 
-协议（需 ?token=<登录令牌>）：
+协议（URL 需 ?ticket=<一次性票据>，经 REST POST /api/auth/ws-ticket 用
+Bearer 令牌换取；长效令牌不出请求头，bug #23）：
   客户端 -> 服务端：
     文本帧 {"type":"text","content":...} / {"type":"stop"} /
             {"type":"asr_start","sample_rate":N}
@@ -333,8 +334,9 @@ class VoiceConnection:
 
 @router.websocket("/ws/voice")
 async def voice(ws: WebSocket) -> None:
-    # 多用户认证：WebSocket 无法携带请求头，用查询参数 ?token=...
-    user = auth.resolve_token_user(ws.query_params.get("token"))
+    # 多用户认证：浏览器 WebSocket 无法携带请求头，URL 只携带一次性短时票据
+    # （消费即删除，单次有效）；长效登录令牌不再出现在 URL（bug #23）
+    user = auth.resolve_ws_ticket(ws.query_params.get("ticket"))
     if user is None:
         await ws.close(code=4401, reason="未登录或登录已过期")
         return

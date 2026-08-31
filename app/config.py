@@ -97,6 +97,9 @@ APP_PORT = int(os.getenv("APP_PORT", os.getenv("VOICE_PORT", "8765")))
 # ---- 登录令牌有效期（天）----
 TOKEN_TTL_DAYS = int(os.getenv("TOKEN_TTL_DAYS", "30"))
 
+# ---- 语音 WS 一次性票据有效期（秒）：URL 只出现短时票据，长效令牌不出 Bearer 头 ----
+WS_TICKET_TTL_SECONDS = int(os.getenv("WS_TICKET_TTL_SECONDS", "60"))
+
 # ---- 语音 WS 文本消息限流（按用户滑动窗口，防单连接刷消息烧 LLM 余额）----
 VOICE_TEXT_RATE_LIMIT = int(os.getenv("VOICE_TEXT_RATE_LIMIT", "30"))
 VOICE_TEXT_RATE_WINDOW = float(os.getenv("VOICE_TEXT_RATE_WINDOW", "60"))

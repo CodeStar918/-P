@@ -65,14 +65,15 @@ class TokenCleanupTests(unittest.TestCase):
         db.create_auth_token(uid, "new-tok", future)
         conn = db.get_conn()
         try:
+            # bug #25 后库内只存哈希（token_hash），明文不落库；按行数断言清理效果
             tokens = {
-                r["token"]
-                for r in conn.execute("SELECT token FROM auth_tokens WHERE user_id=?", (uid,))
+                r["token_hash"]
+                for r in conn.execute("SELECT token_hash FROM auth_tokens WHERE user_id=?", (uid,))
             }
         finally:
             conn.close()
-        self.assertNotIn("expired-tok", tokens)
-        self.assertEqual(tokens, {"live-tok", "new-tok"})
+        self.assertEqual(len(tokens), 2)  # expired-tok 被清理，live-tok/new-tok 保留
+        self.assertTrue(all(len(t) == 64 for t in tokens), "落库值应为 64 位哈希")
 
 
 class ChatRateLimitAndLockTests(unittest.TestCase):

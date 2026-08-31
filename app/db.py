@@ -21,7 +21,7 @@ from app import config
 logger = logging.getLogger("interview_coach.db")
 
 #: 当前 schema 版本，与 _migrate 的最终 PRAGMA user_version 保持一致；变更 schema 时同步更新
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS questions (
@@ -97,12 +97,21 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS auth_tokens (
-    token      TEXT PRIMARY KEY,                          -- 不透明登录令牌
+    token_hash TEXT PRIMARY KEY,                          -- 登录令牌的 SHA-256 哈希（明文不落库）
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
+
+-- 语音 WS 一次性连接票据（URL 只出现短时票据，长效令牌不出 Bearer 头）
+CREATE TABLE IF NOT EXISTS ws_tickets (
+    ticket_hash TEXT PRIMARY KEY,                         -- 票据的 SHA-256 哈希（单次消费）
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ws_tickets_user ON ws_tickets(user_id);
 
 -- 定制面试（文字版生成，语音接通时读取；按用户隔离，取代旧单文件 voice_store）
 CREATE TABLE IF NOT EXISTS custom_interviews (
@@ -312,6 +321,42 @@ def _migrate(conn: sqlite3.Connection) -> None:
         logger.info(
             "数据库迁移至版本 7：新增用户/令牌/按用户定制面试表，favorites 与 sessions 支持多用户"
         )
+    if version < 8:
+        # 登录令牌改存 SHA-256 哈希（bug #25）：重建 auth_tokens，明文行逐条哈希迁移。
+        # SHA-256 为确定性哈希，迁移后客户端手中的明文令牌在下次请求时被服务端
+        # 哈希后照常匹配，存量登录态不失效（用户不掉线）；顺带清理过期行。
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(auth_tokens)")}
+        if "token" in cols:  # 旧结构（token 明文列）才需要重建
+            rows = conn.execute(
+                "SELECT token, user_id, created_at, expires_at FROM auth_tokens"
+            ).fetchall()
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS auth_tokens_new (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                );
+                """
+            )
+            now = datetime.now(timezone.utc).isoformat()
+            for r in rows:
+                if r["expires_at"] <= now:
+                    continue
+                tok = r["token"]
+                if len(tok) != 64:  # 64 位 hex 视为已哈希（幂等保护），否则视为明文
+                    tok = _token_hash(tok)
+                conn.execute(
+                    "INSERT OR IGNORE INTO auth_tokens_new "
+                    "(token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)",
+                    (tok, r["user_id"], r["created_at"], r["expires_at"]),
+                )
+            conn.execute("DROP TABLE auth_tokens")
+            conn.execute("ALTER TABLE auth_tokens_new RENAME TO auth_tokens")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id)")
+        conn.execute("PRAGMA user_version = 8")
+        logger.info("数据库迁移至版本 8：登录令牌改存 SHA-256 哈希，新增 WS 一次性票据表")
     _sync_fts(conn)
 
 
@@ -1019,26 +1064,39 @@ def touch_user_login(user_id: int) -> None:
         )
 
 
+def _token_hash(token: str) -> str:
+    """令牌/票据落库前统一哈希：SHA-256。
+
+    令牌为 secrets.token_urlsafe(32) 高熵随机串，无需密码级 KDF 抗爆破；
+    确定性哈希使存量明文行可无损迁移（客户端令牌在服务端哈希后照常匹配）。
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def create_auth_token(user_id: int, token: str, expires_at: str) -> None:
-    """保存登录令牌。签发时顺带清理该库全部过期令牌（bug #9：过期行只增不减）。"""
+    """保存登录令牌（落库前哈希，明文不持久化）。
+
+    签发时顺带清理该库全部过期令牌（bug #9：过期行只增不减）。
+    """
     now = datetime.now(timezone.utc).isoformat()
     with closing(get_conn()) as conn, conn:
         conn.execute("DELETE FROM auth_tokens WHERE expires_at <= ?", (now,))
         conn.execute(
-            "INSERT INTO auth_tokens (token, user_id, created_at, expires_at) VALUES (?,?,?,?)",
-            (token, user_id, now, expires_at),
+            "INSERT INTO auth_tokens (token_hash, user_id, created_at, expires_at) "
+            "VALUES (?,?,?,?)",
+            (_token_hash(token), user_id, now, expires_at),
         )
 
 
 def get_user_by_token(token: str):
-    """按令牌取用户（校验有效期）；无效/过期返回 None。"""
+    """按令牌取用户（校验有效期）；无效/过期返回 None。查询值同样先哈希。"""
     now = datetime.now(timezone.utc).isoformat()
     with closing(get_conn()) as conn:
         return _row_to_dict(
             conn.execute(
                 "SELECT u.* FROM auth_tokens t JOIN users u ON u.id = t.user_id "
-                "WHERE t.token = ? AND t.expires_at > ?",
-                (token, now),
+                "WHERE t.token_hash = ? AND t.expires_at > ?",
+                (_token_hash(token), now),
             ).fetchone()
         )
 
@@ -1046,13 +1104,46 @@ def get_user_by_token(token: str):
 def revoke_token(token: str) -> None:
     """注销单个令牌。"""
     with closing(get_conn()) as conn, conn:
-        conn.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
+        conn.execute("DELETE FROM auth_tokens WHERE token_hash = ?", (_token_hash(token),))
 
 
 def revoke_all_tokens(user_id: int) -> None:
     """注销某用户全部令牌（如修改密码/退出所有端）。"""
     with closing(get_conn()) as conn, conn:
         conn.execute("DELETE FROM auth_tokens WHERE user_id = ?", (user_id,))
+
+
+# ---------------------------------------------------------------- WS 一次性票据
+
+
+def create_ws_ticket(user_id: int, ticket: str, expires_at: str) -> None:
+    """保存 WS 一次性连接票据（落库前哈希）。签发时顺带清理全部过期票据。"""
+    now = datetime.now(timezone.utc).isoformat()
+    with closing(get_conn()) as conn, conn:
+        conn.execute("DELETE FROM ws_tickets WHERE expires_at <= ?", (now,))
+        conn.execute(
+            "INSERT INTO ws_tickets (ticket_hash, user_id, created_at, expires_at) "
+            "VALUES (?,?,?,?)",
+            (_token_hash(ticket), user_id, now, expires_at),
+        )
+
+
+def consume_ws_ticket(ticket: str) -> int | None:
+    """消费一次性票据：校验与删除同事务（保证单次有效），返回 user_id。
+
+    无效 / 过期 / 已消费返回 None。
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    h = _token_hash(ticket)
+    with closing(get_conn()) as conn, conn:
+        row = conn.execute(
+            "SELECT user_id FROM ws_tickets WHERE ticket_hash = ? AND expires_at > ?",
+            (h, now),
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute("DELETE FROM ws_tickets WHERE ticket_hash = ?", (h,))
+        return row["user_id"]
 
 
 # ---------------------------------------------------------------- 定制面试（按用户）

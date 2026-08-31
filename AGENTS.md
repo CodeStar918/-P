@@ -60,9 +60,11 @@ python -m app.crawler.run
   npmmirror 镜像。
 - 测试必须可离线运行：LLM、网络、edge-tts 全部 mock；不要依赖真实 API Key。
 - 运行时通过环境变量注入密钥（`.env` 不入库），参见 `.env.example`。
-- 数据库迁移通过 `PRAGMA user_version`（当前版本 7，含多用户表）；改 schema 需在
-  `app/db.py` 的 `_migrate` 追加迁移步骤并升级版本号。
-- 登录令牌经 `Authorization: Bearer <token>`（REST）与 `?token=`（WebSocket）传递；
+- 数据库迁移通过 `PRAGMA user_version`（当前版本 8，令牌哈希化 + WS 一次性票据表）；
+  改 schema 需在 `app/db.py` 的 `_migrate` 追加迁移步骤并升级版本号。
+- 登录令牌经 `Authorization: Bearer <token>`（REST）传递；WebSocket 无法带请求头，
+  前端先 `POST /api/auth/ws-ticket`（Bearer）换取一次性短时票据，WS URL 只携带
+  `?ticket=<票据>`——长效令牌禁止出现在 URL，落库值一律为 SHA-256 哈希；
   新增受保护接口用 `auth.CurrentUser` 依赖解析当前用户。
 
 ## 工程纪律
