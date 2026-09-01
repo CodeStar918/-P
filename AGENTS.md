@@ -35,12 +35,16 @@ python -m app.crawler.run
 - `app/`：应用包。
   - `voice_server.py`：**统一 FastAPI 服务**——挂载 REST 路由、语音 WebSocket（按
     用户认证）、托管 `frontend/dist`（SPA history 回退）。
-  - `routers/`：REST 路由（`auth` 认证 / `session` 会话与 SSE 聊天 / `questions`
+  - `voice_ws.py`：语音 WebSocket 协议处理（生命周期、互踢、ASR、回复生成）。
+  - `routers/`：REST 路由层（`auth` 认证 / `session` 会话与 SSE 聊天 / `questions`
     题库与收藏 / `custom` 定制面试）。
-  - `auth.py`（pbkdf2 + 令牌）、`session_store.py`（会话持久化）、
-    `voice_store.py`（按用户定制面试）为多用户数据层。
-  - `agent/`：会话状态机（`coach.py` 支持 to_dict/from_dict 序列化）与 LLM 封装；
-    `crawler/`：数据源适配器；`ui/`：仅保留静态资源 `assets/`（头像）。
+  - `agent/`：领域层——会话状态机（`coach.py` 支持 to_dict/from_dict 序列化）与 LLM 封装。
+  - `crawler/`：采集层，数据源适配器。
+  - `core/`：基础设施——`config` / `db` / `ratelimit` / `scheduler`。
+  - `services/`：业务服务——`tts` / `asr_client` / `prompts` / `importer`。
+  - `stores/`：数据访问层——`session_store`（会话持久化）、`voice_store`（按用户
+    定制面试）、`auth`（pbkdf2 + 令牌）为多用户数据层。
+  - `ui/`：仅保留静态资源 `assets/`（头像）。
 - `frontend/`：Vue3 前端工程（Vite + Element Plus）。`src/composables/voice/`
   是语音通话引擎（从旧 `voice_page.html` 移植）。构建产物 `frontend/dist` 由后端托管，
   **修改前端后需 `npm run build` 并重启/刷新**。
@@ -61,7 +65,7 @@ python -m app.crawler.run
 - 测试必须可离线运行：LLM、网络、edge-tts 全部 mock；不要依赖真实 API Key。
 - 运行时通过环境变量注入密钥（`.env` 不入库），参见 `.env.example`。
 - 数据库迁移通过 `PRAGMA user_version`（当前版本 8，令牌哈希化 + WS 一次性票据表）；
-  改 schema 需在 `app/db.py` 的 `_migrate` 追加迁移步骤并升级版本号。
+  改 schema 需在 `app/core/db.py` 的 `_migrate` 追加迁移步骤并升级版本号。
 - 登录令牌经 `Authorization: Bearer <token>`（REST）传递；WebSocket 无法带请求头，
   前端先 `POST /api/auth/ws-ticket`（Bearer）换取一次性短时票据，WS URL 只携带
   `?ticket=<票据>`——长效令牌禁止出现在 URL，落库值一律为 SHA-256 哈希；
