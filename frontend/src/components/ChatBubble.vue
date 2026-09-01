@@ -76,7 +76,7 @@ const rendered = computed(() => renderMarkdown(props.content))
   margin-right: 10px;
   margin-top: 4px;
   border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(31, 58, 102, 0.14);
+  box-shadow: 0 2px 8px rgba(120, 90, 60, 0.14);
 }
 .msg.assistant .avatar img {
   width: 100%;
@@ -85,11 +85,11 @@ const rendered = computed(() => renderMarkdown(props.content))
   object-position: center 28%;
 }
 .msg.assistant .bubble {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #e8edf6;
+  background: #fff;
+  border: 1px solid var(--border);
   border-radius: 16px 16px 16px 5px;
   padding: 12px 16px;
-  box-shadow: 0 1px 4px rgba(20, 40, 80, 0.05);
+  box-shadow: var(--shadow-card);
   max-width: 96%;
   font-size: 15px;
   line-height: 1.7;
@@ -102,8 +102,8 @@ const rendered = computed(() => renderMarkdown(props.content))
   margin-bottom: 0;
 }
 :deep(.md) pre {
-  background: #f6f8fb;
-  border: 1px solid #e5eaf3;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
   overflow-x: auto;
@@ -122,7 +122,7 @@ const rendered = computed(() => renderMarkdown(props.content))
 }
 :deep(.md) th,
 :deep(.md) td {
-  border: 1px solid #e2e8f2;
+  border: 1px solid var(--border);
   padding: 4px 8px;
   font-size: 13px;
 }
@@ -136,7 +136,7 @@ const rendered = computed(() => renderMarkdown(props.content))
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #9db2e8;
+  background: var(--brand-light);
   animation: tp 1s ease-in-out infinite;
 }
 .typing-dots i:nth-child(2) {

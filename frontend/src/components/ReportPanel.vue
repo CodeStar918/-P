@@ -119,18 +119,29 @@ const ringOffset = computed(() => {
 })
 
 function dimColor(score) {
-  return score >= 60 ? 'linear-gradient(90deg, var(--brand), var(--brand-light))' : 'linear-gradient(90deg, #f7a84f, #ffc26e)'
+  return score >= 60 ? 'linear-gradient(90deg, var(--brand), var(--brand-light))' : 'linear-gradient(90deg, #d9a441, #e6bb6d)'
 }
 </script>
 
 <style scoped>
 .report-panel {
+  position: relative;
   background: #fff;
-  border: 1px solid #e7ecf4;
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 18px 20px 14px;
   margin: 14px 0 4px;
-  box-shadow: 0 4px 20px rgba(var(--brand-rgb), 0.08);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+}
+.report-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-light));
 }
 .report-head {
   display: flex;
@@ -142,14 +153,14 @@ function dimColor(score) {
 .report-raw {
   margin-top: 14px;
   padding: 14px 16px;
-  background: #f7f9fd;
-  border: 1px solid #e7ecf4;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 13px;
   line-height: 1.7;
-  color: #3a4664;
+  color: var(--text);
 }
 .report-title-box {
   min-width: 0;
@@ -163,11 +174,11 @@ function dimColor(score) {
 .report-title {
   font-size: 20px;
   font-weight: 700;
-  color: #2b3448;
+  color: var(--ink-strong);
 }
 .report-sub {
   font-size: 12px;
-  color: #7b879c;
+  color: var(--muted);
   margin-top: 4px;
 }
 .score-ring {
@@ -183,7 +194,7 @@ function dimColor(score) {
 }
 .ring-bg {
   fill: none;
-  stroke: #eef1f7;
+  stroke: #f1ece3;
   stroke-width: 10;
 }
 .ring-fg {
@@ -199,7 +210,7 @@ function dimColor(score) {
   transform: translate(-50%, -58%);
   font-size: 30px;
   font-weight: 800;
-  color: #2b3448;
+  color: var(--ink-strong);
 }
 .score-total {
   position: absolute;
@@ -207,7 +218,7 @@ function dimColor(score) {
   left: 50%;
   transform: translateX(-50%);
   font-size: 11px;
-  color: #9aa5bb;
+  color: var(--muted);
 }
 .report-section {
   margin-top: 16px;
@@ -218,7 +229,7 @@ function dimColor(score) {
   gap: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #2b3448;
+  color: var(--ink);
   margin-bottom: 10px;
 }
 .dot {
@@ -231,10 +242,10 @@ function dimColor(score) {
   background: var(--brand);
 }
 .dot-weak {
-  background: #f7a84f;
+  background: var(--warning);
 }
 .dot-improve {
-  background: #34c77b;
+  background: var(--success);
 }
 .dim-row {
   display: flex;
@@ -246,7 +257,7 @@ function dimColor(score) {
   width: 110px;
   flex: 0 0 110px;
   font-size: 13px;
-  color: #56637a;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -255,7 +266,7 @@ function dimColor(score) {
   flex: 1;
   height: 8px;
   border-radius: 999px;
-  background: #eef1f7;
+  background: #f1ece3;
   overflow: hidden;
 }
 .dim-fill {
@@ -268,7 +279,7 @@ function dimColor(score) {
   text-align: right;
   font-size: 13px;
   font-weight: 600;
-  color: #2b3448;
+  color: var(--ink);
 }
 .point-list {
   margin: 0;
@@ -280,8 +291,8 @@ function dimColor(score) {
   padding: 6px 0 6px 18px;
   font-size: 13px;
   line-height: 1.6;
-  color: #56637a;
-  border-bottom: 1px dashed #eef1f7;
+  color: var(--text);
+  border-bottom: 1px dashed var(--border);
 }
 .point-list li:last-child {
   border-bottom: none;
@@ -296,16 +307,16 @@ function dimColor(score) {
   border-radius: 50%;
 }
 .point-list.weak li::before {
-  background: #f7a84f;
+  background: var(--warning);
 }
 .point-list.improve li::before {
-  background: #34c77b;
+  background: var(--success);
 }
 .report-foot {
   display: flex;
   justify-content: flex-end;
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid #eef1f7;
+  border-top: 1px solid var(--border);
 }
 </style>

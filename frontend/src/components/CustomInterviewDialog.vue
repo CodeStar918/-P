@@ -92,7 +92,7 @@ async function generate() {
 }
 .gen-status {
   margin-top: 16px;
-  color: #56637a;
+  color: var(--text);
   font-size: 14px;
   display: flex;
   align-items: center;
@@ -102,7 +102,7 @@ async function generate() {
 .spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid #cdd9f7;
+  border: 2px solid var(--border);
   border-top-color: var(--brand);
   border-radius: 50%;
   animation: rot 0.8s linear infinite;

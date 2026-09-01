@@ -24,7 +24,6 @@
       <div class="vmicbar">
         <i :style="{ width: ui.micLevel + '%' }" />
       </div>
-      <button class="vmicTest" title="录 2 秒并回放，确认麦克风正常" @click="micTest">测试</button>
     </div>
 
     <div class="vwave" :class="{ on: ui.waveOn }">
@@ -59,7 +58,7 @@ import { useVoiceCall } from '../composables/voice/useVoiceCall'
 const router = useRouter()
 const transcriptRef = ref(null)
 
-const { ui, connect, disconnect, micTest, onStatusClick } = useVoiceCall()
+const { ui, connect, disconnect, onStatusClick } = useVoiceCall()
 
 const hintText = computed(() =>
   ui.voiceReady

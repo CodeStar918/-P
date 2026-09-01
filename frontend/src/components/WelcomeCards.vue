@@ -42,28 +42,28 @@ const cards = [
 .hero-title {
   font-size: 21px;
   font-weight: 700;
-  color: #1e2c46;
+  color: var(--ink-strong);
   letter-spacing: 0.5px;
 }
 .hero-sub {
   margin-top: 6px;
   font-size: 13px;
-  color: #7b879c;
+  color: var(--muted);
   letter-spacing: 0.5px;
 }
 .qcard {
   background: #fff;
-  border: 1px solid #e7edf6;
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px 12px 12px;
   text-align: center;
-  box-shadow: 0 2px 10px rgba(20, 40, 80, 0.05);
+  box-shadow: var(--shadow-card);
   margin-bottom: 10px;
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .qcard:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(20, 40, 80, 0.1);
+  box-shadow: var(--shadow-float);
 }
 .qicon {
   font-size: 26px;
@@ -74,12 +74,12 @@ const cards = [
   margin-top: 6px;
   font-size: 15px;
   font-weight: 700;
-  color: #243352;
+  color: var(--ink);
 }
 .qdesc {
   margin-top: 4px;
   font-size: 12px;
-  color: #8792a7;
+  color: var(--muted);
   min-height: 34px;
 }
 .qbtn {

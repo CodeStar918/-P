@@ -1,15 +1,57 @@
-/* ===== 面试官小P · 全局样式（保留原 Streamlit / 语音页视觉）===== */
+/* ===== 面试官小P · 全局样式（温馨简约 · 暖珊瑚主题）===== */
 :root {
-  --brand: #4f6ef7;
-  --brand-2: #6482f8;
-  --brand-light: #7a93ff;
-  --brand-rgb: 79, 110, 247;
-  --ink: #243352;
-  --ink-strong: #1e2c46;
-  --text: #56637a;
-  --muted: #7b879c;
-  --border: #e7ecf4;
+  /* 品牌主色 · 暖珊瑚（设计规范 docs/design-spec.md §3.1） */
+  --brand: #d97852;
+  --brand-2: #c4603a;
+  --brand-light: #f3b599;
+  --brand-rgb: 217, 120, 82;
+
+  /* 文字 · 暖炭灰 */
+  --ink: #3b3833;
+  --ink-strong: #2a2722;
+  --text: #6e675c;
+  --muted: #8c8578;
+
+  /* 表面 · 奶油米白画布 */
+  --canvas: #faf7f2;
+  --surface: #f5f0e8;
+  --border: #eae2d6;
+
+  /* 语义色 · 低饱和暖调 */
+  --success: #6b9e6b;
+  --warning: #d9a441;
+  --danger: #c65b4e;
+  --info: #5b8fa6;
+
+  /* 圆角与阴影（暖棕灰阴影色相） */
   --radius: 16px;
+  --shadow-card: 0 2px 12px rgba(120, 90, 60, 0.06);
+  --shadow-float: 0 8px 28px rgba(120, 90, 60, 0.14);
+
+  /* Element Plus 组件事务换肤为暖色系（与品牌令牌同源） */
+  --el-color-primary: var(--brand);
+  --el-color-primary-light-3: #e39b7c;
+  --el-color-primary-light-5: #edbb9f;
+  --el-color-primary-light-7: #f3d2bd;
+  --el-color-primary-light-8: #f6dfd0;
+  --el-color-primary-light-9: #f9e6d8;
+  --el-color-primary-dark-2: var(--brand-2);
+  --el-color-success: var(--success);
+  --el-color-warning: var(--warning);
+  --el-color-danger: var(--danger);
+  --el-color-info: var(--info);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--text);
+  --el-text-color-secondary: var(--muted);
+  --el-text-color-placeholder: #b8b0a4;
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+  --el-border-color-lighter: #f1ece3;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: var(--surface);
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+  --el-component-size: 40px; /* 全局表单触控基准高度（规范 §9.2） */
 }
 * {
   box-sizing: border-box;
@@ -24,12 +66,18 @@ body,
 
 body {
   font-family:
-    "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-    system-ui, -apple-system, sans-serif;
-  background: radial-gradient(1100px 560px at 50% -10%, #e9f0ff 0%, #f8fafd 50%, #f2f5fa 100%);
+    "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB",
+    "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: radial-gradient(1100px 560px at 50% -10%, #fdf4ea 0%, #faf7f2 55%, #f6f1e9 100%);
   background-attachment: fixed;
-  color: #243352;
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
+}
+
+/* 键盘可达性：聚焦元素显珊瑚外环（规范 §6.1） */
+:focus-visible {
+  outline: 2px solid var(--brand-light);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -37,11 +85,11 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cdd7ea;
+  background: #d9cfc2;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #b7c3dd;
+  background: #c9bbaa;
 }
 
 /* ---------- 品牌头部 ---------- */
@@ -60,7 +108,7 @@ body {
   border-radius: 50%;
   overflow: hidden;
   border: 2px solid #fff;
-  box-shadow: 0 4px 14px rgba(31, 58, 102, 0.16);
+  box-shadow: 0 4px 14px rgba(120, 90, 60, 0.16);
 }
 .brand-avatar img {
   width: 100%;
@@ -72,13 +120,13 @@ body {
 .brand-name {
   font-size: 19px;
   font-weight: 700;
-  color: #1e2c46;
+  color: var(--ink-strong);
   letter-spacing: 0.4px;
 }
 .brand-status {
   margin-top: 3px;
   font-size: 12px;
-  color: #3f8f63;
+  color: var(--success);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -87,8 +135,8 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(107, 158, 107, 0.14);
   animation: dp 2.2s ease-in-out infinite;
 }
 @keyframes dp {
@@ -102,7 +150,7 @@ body {
 }
 .chat-mode {
   font-size: 13px;
-  color: #7b879c;
+  color: var(--muted);
   letter-spacing: 0.4px;
 }
 
@@ -114,28 +162,28 @@ body {
 .hero-title {
   font-size: 21px;
   font-weight: 700;
-  color: #1e2c46;
+  color: var(--ink-strong);
   letter-spacing: 0.5px;
 }
 .hero-sub {
   margin-top: 6px;
   font-size: 13px;
-  color: #7b879c;
+  color: var(--muted);
   letter-spacing: 0.5px;
 }
 .qcard {
   background: #fff;
-  border: 1px solid #e7edf6;
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px 12px 12px;
   text-align: center;
-  box-shadow: 0 2px 10px rgba(20, 40, 80, 0.05);
+  box-shadow: var(--shadow-card);
   margin-bottom: 10px;
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .qcard:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(20, 40, 80, 0.1);
+  box-shadow: var(--shadow-float);
 }
 .qicon {
   font-size: 26px;
@@ -145,12 +193,12 @@ body {
   margin-top: 6px;
   font-size: 15px;
   font-weight: 700;
-  color: #243352;
+  color: var(--ink);
 }
 .qdesc {
   margin-top: 4px;
   font-size: 12px;
-  color: #8792a7;
+  color: var(--muted);
 }
 
 /* ---------- 聊天气泡 ---------- */
@@ -178,10 +226,10 @@ body {
 }
 .msg.assistant .bubble {
   background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #e8edf6;
+  border: 1px solid var(--border);
   border-radius: 16px 16px 16px 5px;
   padding: 14px 18px;
-  box-shadow: 0 1px 4px rgba(20, 40, 80, 0.05);
+  box-shadow: var(--shadow-card);
   max-width: 96%;
   font-size: 15px;
   line-height: 1.7;
@@ -193,8 +241,8 @@ body {
   margin-bottom: 0;
 }
 .msg.assistant .bubble pre {
-  background: #f6f8fb;
-  border: 1px solid #e5eaf3;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
   overflow-x: auto;
@@ -210,7 +258,7 @@ body {
   overflow: hidden;
   margin-right: 10px;
   border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(31, 58, 102, 0.14);
+  box-shadow: 0 2px 8px rgba(120, 90, 60, 0.14);
 }
 .msg.assistant .avatar img {
   width: 100%;
@@ -230,7 +278,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #9db2e8;
+  background: var(--brand-light);
   animation: tp 1s ease-in-out infinite;
 }
 .typing-dots i:nth-child(2) {
@@ -255,31 +303,32 @@ body {
 .side-title {
   font-size: 13px;
   font-weight: 700;
-  color: #56637a;
+  color: var(--text);
   letter-spacing: 1px;
   margin-bottom: 10px;
 }
 .stat-card {
   background: #fff;
-  border: 1px solid #e7edf6;
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 4px;
   text-align: center;
-  box-shadow: 0 1px 4px rgba(20, 40, 80, 0.04);
+  box-shadow: var(--shadow-card);
 }
 .stat-num {
   font-size: 19px;
   font-weight: 700;
-  color: #243352;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 .stat-label {
   margin-top: 2px;
   font-size: 11px;
-  color: #8a95aa;
+  color: var(--muted);
 }
 .side-note {
   font-size: 12px;
-  color: #7b879c;
+  color: var(--muted);
   margin: 12px 0 0;
 }
 .rev-row {
@@ -289,25 +338,34 @@ body {
   padding: 6px 8px;
   margin: 4px 0;
   background: #fff;
-  border: 1px solid #eef1f7;
+  border: 1px solid var(--border);
   border-radius: 10px;
   font-size: 12px;
-  color: #56637a;
+  color: var(--text);
 }
 .rev-score {
   font-weight: 700;
-  color: var(--brand);
+  color: var(--ink);
+}
+.rev-score.good {
+  color: var(--success);
+}
+.rev-score.mid {
+  color: var(--warning);
+}
+.rev-score.low {
+  color: var(--danger);
 }
 .rev-meta {
-  color: #8a95aa;
+  color: var(--muted);
 }
 .voice-ready {
-  background: linear-gradient(135deg, #eef3ff, #e6edff);
-  border: 1px solid #cdd9f7;
+  background: linear-gradient(135deg, #fdf1ea, #f9e6d8);
+  border: 1px solid #f3d2bd;
   border-radius: 12px;
   padding: 10px 14px;
   font-size: 13px;
-  color: #33508c;
+  color: #a94a2e;
 }
 
 /* ---------- 语音通话页（手机式）---------- */
@@ -319,14 +377,14 @@ body {
   flex-direction: column;
   padding: 18px 18px calc(110px + env(safe-area-inset-bottom));
   position: relative;
-  color: #f4f6fb;
+  color: var(--ink);
 }
 .vphone::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: radial-gradient(1200px 600px at 20% -10%, #3b4f8f 0%, #22304f 45%, #141c30 100%);
+  background: radial-gradient(1200px 600px at 20% -10%, #fdf2e7 0%, #faf6ef 50%, #f6efe5 100%);
 }
 .vphone::after {
   content: "";
@@ -334,9 +392,8 @@ body {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(520px 300px at 85% -5%, rgba(120, 150, 255, 0.28), transparent 60%),
-    radial-gradient(420px 260px at -10% 30%, rgba(255, 120, 160, 0.14), transparent 60%),
-    radial-gradient(600px 340px at 50% 115%, rgba(47, 191, 113, 0.12), transparent 60%);
+    radial-gradient(520px 300px at 85% -5%, rgba(217, 120, 82, 0.2), transparent 60%),
+    radial-gradient(420px 260px at -10% 30%, rgba(243, 181, 153, 0.24), transparent 60%);
 }
 .vtop {
   display: flex;
@@ -345,13 +402,13 @@ body {
   gap: 8px;
 }
 .vtop .back {
-  color: #9fb2d9;
+  color: var(--muted);
   text-decoration: none;
   font-size: 13px;
   cursor: pointer;
 }
 .vtop .back:hover {
-  color: #fff;
+  color: var(--brand);
 }
 .vtop .title {
   font-size: 17px;
@@ -360,9 +417,9 @@ body {
 }
 .vmode {
   font-size: 12px;
-  color: #ffd166;
-  background: rgba(255, 209, 102, 0.12);
-  border: 1px solid rgba(255, 209, 102, 0.35);
+  color: #b4553a;
+  background: #f9e6d8;
+  border: 1px solid #f3d2bd;
   padding: 2px 10px;
   border-radius: 999px;
   white-space: nowrap;
@@ -378,12 +435,12 @@ body {
   object-fit: cover;
   object-position: center 28%;
   border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.22);
-  box-shadow: 0 16px 42px rgba(10, 16, 34, 0.55);
+  border: 3px solid #fff;
+  box-shadow: 0 16px 42px rgba(120, 90, 60, 0.28);
   display: block;
 }
 .vavatar.glow img {
-  filter: drop-shadow(0 0 28px rgba(109, 134, 245, 0.75));
+  filter: drop-shadow(0 0 28px rgba(217, 120, 82, 0.5));
   transition: filter 0.35s ease;
 }
 .av-fig {
@@ -410,45 +467,47 @@ body {
 }
 .vstatus {
   min-width: 170px;
+  min-height: 44px; /* 触控热区基线（规范 §9.2） */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   font-size: 14px;
-  color: #d7e0f5;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--border);
   padding: 7px 18px;
   border-radius: 999px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px); /* Safari ≤17 前缀（bug #31） */
 }
 .vstatus.busy {
-  color: #ffd166;
-  border-color: rgba(255, 209, 102, 0.45);
+  color: var(--brand-2);
+  border-color: #f3d2bd;
 }
 .vstatus.interruptible {
   cursor: pointer;
-  border-color: rgba(255, 209, 102, 0.75);
+  background: #f9e6d8;
+  border-color: #f3b599;
   text-decoration: underline dotted;
 }
 .vtimer {
   font-size: 13px;
-  color: #9fb2d9;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #fff;
+  border: 1px solid var(--border);
   padding: 6px 12px;
   border-radius: 999px;
   min-width: 58px;
   text-align: center;
 }
 .vmicrow {
-  /* 接通前也显示（麦克风电平条为空）："测试"按钮定位就是接通前预检（bug #30） */
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   margin-top: 10px;
   font-size: 12px;
-  color: #9fb2d9;
+  color: var(--muted);
   opacity: 0.7;
 }
 .vmicrow.on {
@@ -457,7 +516,7 @@ body {
 .vmicbar {
   width: 130px;
   height: 6px;
-  background: rgba(255, 255, 255, 0.12);
+  background: #f1ece3;
   border-radius: 3px;
   overflow: hidden;
 }
@@ -465,21 +524,8 @@ body {
   display: block;
   height: 100%;
   width: 0;
-  background: linear-gradient(90deg, var(--brand), #2fbf71);
+  background: linear-gradient(90deg, var(--brand), var(--brand-light));
   transition: width 0.06s linear;
-}
-.vmicTest {
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08);
-  color: #d7e0f5;
-  border-radius: 999px;
-  padding: 3px 12px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.vmicTest:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  color: #fff;
 }
 .vwave {
   display: none;
@@ -496,7 +542,7 @@ body {
   width: 4px;
   height: 7px;
   border-radius: 2px;
-  background: #6e8bff;
+  background: linear-gradient(180deg, var(--brand), var(--brand-light));
   animation: wv 0.85s ease-in-out infinite;
 }
 .vwave i:nth-child(2) {
@@ -562,16 +608,16 @@ body {
 }
 .vbubble.assistant {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.1);
-  color: #eef2fb;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--ink);
   border-bottom-left-radius: 4px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px); /* Safari ≤17 前缀（bug #31） */
+  box-shadow: var(--shadow-card);
 }
 .vbubble.hint {
   align-self: center;
   background: transparent;
-  color: #8fa3cc;
+  color: var(--muted);
   font-size: 12px;
   padding: 2px 6px;
   max-width: 92%;
@@ -594,8 +640,8 @@ body {
   cursor: pointer;
   font-size: 26px;
   color: #fff;
-  background: #2fbf71;
-  box-shadow: 0 6px 24px rgba(47, 191, 113, 0.45);
+  background: var(--brand);
+  box-shadow: 0 6px 24px rgba(var(--brand-rgb), 0.45);
   transition: all 0.25s;
 }
 #callBtn:hover {
@@ -609,16 +655,16 @@ body {
   letter-spacing: 1px;
 }
 #callBtn.on {
-  background: #e74c3c;
+  background: var(--danger);
   animation: micPulse 0.9s ease-in-out infinite;
 }
 @keyframes micPulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.45);
+    box-shadow: 0 0 0 0 rgba(198, 91, 78, 0.45);
   }
   50% {
-    box-shadow: 0 0 0 16px rgba(231, 76, 60, 0);
+    box-shadow: 0 0 0 16px rgba(198, 91, 78, 0);
   }
 }
 
@@ -630,8 +676,9 @@ body {
   z-index: 999;
   max-width: 48vw;
   font: 11px/1.5 ui-monospace, Consolas, monospace;
-  color: #9fe8b2;
-  background: rgba(10, 16, 34, 0.94);
+  color: #7a4a2e;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--border);
   padding: 6px 8px;
   border-radius: 6px;
   white-space: pre-wrap;
