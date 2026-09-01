@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-xiaop-voice = "app.voice_server:main"
+xiaop-voice = "app.main:main"
 xiaop-crawl = "app.crawler.run:main"
 
 [tool.setuptools]

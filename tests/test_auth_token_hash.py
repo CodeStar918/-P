@@ -13,8 +13,8 @@ from unittest import mock
 
 from app.core import config, db
 from app.core.ratelimit import reset_rate_limits
+from app.main import app
 from app.stores import auth
-from app.voice_server import app
 from fastapi.testclient import TestClient
 
 

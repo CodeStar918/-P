@@ -1,4 +1,4 @@
-"""语音通话 WebSocket 端点 /ws/voice（从 voice_server 拆出）。
+"""语音通话 WebSocket 端点 /ws/voice（从统一服务 main.py 拆出）。
 
 职责：连接生命周期（认证、单用户互踢、会话恢复、ASR 管理、消息分发、
 文本限流）与回复生成（LLM 流式 + TTS 推送，支持 barge-in 取消）。
@@ -34,7 +34,7 @@ from app.services import prompts, tts
 from app.services.asr_client import DashScopeASR
 from app.stores import auth, session_store, voice_store
 
-logger = logging.getLogger("voice_server")
+logger = logging.getLogger("interview_coach.voice_ws")
 
 _END = object()  # 生成器结束哨兵（StopIteration 不能跨 asyncio.to_thread 传播）
 

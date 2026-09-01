@@ -26,7 +26,7 @@
 ```
 智能面试/
 ├── app/                  # 后端（统一 FastAPI 服务）
-│   ├── voice_server.py   # 入口：挂载 REST/WS，托管前端 dist
+│   ├── main.py            # 入口：挂载 REST/WS，托管前端 dist
 │   ├── voice_ws.py       # 语音 WebSocket 协议处理
 │   ├── routers/          # REST 路由层：auth / session / questions / custom
 │   ├── agent/            # 领域层：会话状态机 + LLM 封装
@@ -63,7 +63,7 @@ copy .env.example .env     # 编辑 .env，填入 DEEPSEEK_API_KEY=sk-你的key
 
   ```bash
   cd frontend && npm install && npm run build && cd ..
-  python -m uvicorn app.voice_server:app --host 127.0.0.1 --port 8765
+  python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
   ```
 
 - **Docker**：`cd deploy && docker compose up -d`
