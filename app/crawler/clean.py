@@ -24,7 +24,7 @@ import argparse
 import logging
 import re
 
-from app import config, db
+from app.core import config, db
 
 logger = logging.getLogger("interview_coach.crawler.clean")
 

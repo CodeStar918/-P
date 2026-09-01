@@ -34,7 +34,16 @@ xiaop-voice = "app.voice_server:main"
 xiaop-crawl = "app.crawler.run:main"
 
 [tool.setuptools]
-packages = ["app", "app.agent", "app.crawler", "app.ui"]
+packages = [
+    "app",
+    "app.agent",
+    "app.crawler",
+    "app.core",
+    "app.services",
+    "app.stores",
+    "app.routers",
+    "app.ui",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

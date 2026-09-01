@@ -7,7 +7,7 @@
 
 import argparse
 
-from app import config
+from app.core import config
 from app.crawler import javaguide, mianshiya, nowcoder
 
 
@@ -45,7 +45,7 @@ def crawl_all(limit_per_source: int | None = None) -> list[dict]:
 
 def main() -> None:
     """命令行入口：解析参数并执行全量抓取。"""
-    from app import db
+    from app.core import db
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="每源最多抓取条数（调试）")

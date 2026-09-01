@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-import app.db as db
+import app.core.db as db
 from app.agent.coach import FINISHED_HINT, InterviewSession
 
 logger = logging.getLogger("interview_coach.session_store")

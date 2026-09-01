@@ -27,7 +27,7 @@ from typing import Protocol
 
 import requests
 
-from app import config
+from app.core import config
 
 try:
     import edge_tts

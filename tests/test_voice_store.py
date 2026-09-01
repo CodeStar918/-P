@@ -5,8 +5,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import app.db as db
-from app import config, voice_store
+import app.core.db as db
+from app.core import config
+from app.stores import voice_store
 
 
 class VoiceStoreTests(unittest.TestCase):

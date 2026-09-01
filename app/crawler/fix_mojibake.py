@@ -18,7 +18,7 @@
 import sys
 from contextlib import closing
 
-from app import db
+from app.core import db
 
 #: 需要修复的文本列
 _TEXT_COLUMNS = ("title", "content", "answer")

@@ -11,8 +11,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from app import auth, config, db
-from app.ratelimit import reset_rate_limits
+from app.core import config, db
+from app.core.ratelimit import reset_rate_limits
+from app.stores import auth
 from app.voice_server import app
 from fastapi.testclient import TestClient
 

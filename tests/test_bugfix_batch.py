@@ -15,15 +15,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from app import auth, config, db
 from app.agent import llm
 from app.agent.coach import (
     InterviewSession,
     _extract_dimensions,
     _extract_weak_points,
 )
+from app.core import config, db
+from app.core.ratelimit import reset_rate_limits
 from app.crawler.fix_mojibake import repair_text
-from app.ratelimit import reset_rate_limits
+from app.stores import auth
 from app.voice_server import app
 from fastapi.testclient import TestClient
 from openai import APIStatusError, RateLimitError
@@ -99,8 +100,8 @@ class ChatRateLimitAndLockTests(unittest.TestCase):
     def test_chat_rate_limited(self):
         with (
             mock.patch("app.agent.llm.chat_stream", return_value=iter(["回复。"])),
-            mock.patch("app.tts.synthesize"),
-            mock.patch("app.config.VOICE_TEXT_RATE_LIMIT", 1),
+            mock.patch("app.services.tts.synthesize"),
+            mock.patch("app.core.config.VOICE_TEXT_RATE_LIMIT", 1),
         ):
             ok = self.client.post("/api/chat", json={"message": "你好"}, headers=self.hdr)
             self.assertEqual(ok.status_code, 200)
@@ -281,7 +282,7 @@ class P3TailTests(unittest.TestCase):
 
     def test_finished_session_hint_no_report_dup(self):
         """bug #27：报告出来后再发言，展示与持久化不再重复/覆盖报告。"""
-        import app.session_store as session_store
+        import app.stores.session_store as session_store
 
         uid = 616161
         s = InterviewSession("mock", user_id=uid)
@@ -501,7 +502,7 @@ class ReportPersistenceTests(unittest.TestCase):
         return s
 
     def test_report_single_row(self):
-        import app.session_store as session_store
+        import app.stores.session_store as session_store
 
         uid = 424242
         s = self._make_finished_session(uid)

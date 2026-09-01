@@ -16,7 +16,7 @@ import sqlite3
 from contextlib import closing, suppress
 from datetime import datetime, timezone
 
-from app import config
+from app.core import config
 
 logger = logging.getLogger("interview_coach.db")
 

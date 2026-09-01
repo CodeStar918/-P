@@ -14,9 +14,10 @@ import logging
 import re
 from datetime import datetime, timezone
 
-import app.db as db
-from app import config, prompts
+import app.core.db as db
 from app.agent import llm
+from app.core import config
+from app.services import prompts
 
 logger = logging.getLogger("interview_coach.coach")
 

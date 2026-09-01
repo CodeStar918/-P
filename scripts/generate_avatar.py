@@ -18,7 +18,7 @@ import requests
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app import config  # noqa: E402  加载 .env（DASHSCOPE_API_KEY）
+from app.core import config  # noqa: E402  加载 .env（DASHSCOPE_API_KEY）
 
 BASE = "https://dashscope.aliyuncs.com"
 

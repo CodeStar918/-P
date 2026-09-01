@@ -6,7 +6,7 @@ from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
-from app import config, db
+from app.core import config, db
 from app.crawler import clean
 
 #: 语义清洗 mock 返回的 LLM 回复（json_object 格式）

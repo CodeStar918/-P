@@ -7,7 +7,7 @@
 本模块保留原函数名与语义，仅把"全局单份"改为"按用户一份"。
 """
 
-import app.db as db
+import app.core.db as db
 
 
 def save_custom_interview(user_id: int, job_title: str, jd: str, questions: list[str]) -> None:

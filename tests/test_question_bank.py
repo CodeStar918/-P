@@ -15,8 +15,8 @@ from unittest import mock
 
 os.environ["DISABLE_SCHEDULER"] = "1"
 
-from app import config, db
 from app.agent.coach import InterviewSession
+from app.core import config, db
 
 
 class QuestionBankChecks(unittest.TestCase):
@@ -201,7 +201,7 @@ class ApiAndFlowTests(unittest.TestCase):
         self._patch = mock.patch.object(config, "DB_PATH", self._db_path)
         self._patch.start()
         db.init_db()
-        from app import auth
+        from app.stores import auth
 
         db.create_user("api_tester", auth.hash_password("pass123456"))
         self.user = db.get_user_by_username("api_tester")
@@ -324,7 +324,7 @@ class ApiAndFlowTests(unittest.TestCase):
 
     def test_custom_status_and_start(self):
         """定制面试状态接口（按用户）与清空。"""
-        import app.voice_store as voice_store
+        import app.stores.voice_store as voice_store
         from app.voice_server import app
         from fastapi.testclient import TestClient
 

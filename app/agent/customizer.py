@@ -9,7 +9,7 @@ import logging
 import re
 from collections.abc import Callable
 
-import app.db as db
+import app.core.db as db
 from app.agent import llm
 from app.crawler import lazy
 

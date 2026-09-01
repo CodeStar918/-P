@@ -10,7 +10,7 @@ import logging
 import random
 import time
 
-from app import config
+from app.core import config
 from openai import (
     APIConnectionError,
     APIStatusError,

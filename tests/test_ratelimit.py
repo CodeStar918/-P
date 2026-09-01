@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import app.db as db
-from app import config
-from app.ratelimit import hit, rate_limit, reset_rate_limits
+import app.core.db as db
+from app.core import config
+from app.core.ratelimit import hit, rate_limit, reset_rate_limits
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 

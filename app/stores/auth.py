@@ -18,8 +18,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, Header, HTTPException
 
-import app.db as db
-from app import config
+import app.core.db as db
+from app.core import config
 
 _PBKDF2_ITERATIONS = 200_000
 

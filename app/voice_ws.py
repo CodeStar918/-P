@@ -27,10 +27,12 @@ from contextlib import suppress
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app import auth, config, prompts, session_store, tts, voice_store
 from app.agent.coach import InterviewSession
-from app.asr_client import DashScopeASR
-from app.ratelimit import hit
+from app.core import config
+from app.core.ratelimit import hit
+from app.services import prompts, tts
+from app.services.asr_client import DashScopeASR
+from app.stores import auth, session_store, voice_store
 
 logger = logging.getLogger("voice_server")
 

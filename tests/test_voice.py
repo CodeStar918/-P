@@ -11,11 +11,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from app import auth, config, db
 from app.agent.coach import InterviewSession
-from app.ratelimit import reset_rate_limits
-from app.tts import TtsState, _cosyvoice_synthesize
-from app.tts import synthesize as _synthesize
+from app.core import config, db
+from app.core.ratelimit import reset_rate_limits
+from app.services.tts import TtsState, _cosyvoice_synthesize
+from app.services.tts import synthesize as _synthesize
+from app.stores import auth
 from app.voice_server import app, health
 from app.voice_ws import maybe_switch_to_mock
 from fastapi.testclient import TestClient
@@ -132,7 +133,7 @@ class VoiceServerTests(unittest.TestCase):
     def test_websocket_streams_reply(self, mock_chat_stream, mock_fts):
         with (
             TestClient(app) as client,
-            mock.patch("app.tts.synthesize", side_effect=_fake_synth),
+            mock.patch("app.services.tts.synthesize", side_effect=_fake_synth),
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
             # 接通后先收到开场白（像打电话一样），消化完再提问
@@ -163,8 +164,8 @@ class VoiceServerTests(unittest.TestCase):
 
         with (
             TestClient(app) as client,
-            mock.patch("app.tts.synthesize", side_effect=fail_once),
-            mock.patch("app.tts.TTS_MAX_CONCURRENCY", 1),  # 串行：保证降级判定确定
+            mock.patch("app.services.tts.synthesize", side_effect=fail_once),
+            mock.patch("app.services.tts.TTS_MAX_CONCURRENCY", 1),  # 串行：保证降级判定确定
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白（同样走降级，不计数）
@@ -188,8 +189,8 @@ class VoiceServerTests(unittest.TestCase):
                     yield {"type": "audio", "data": CHUNK}
 
         with (
-            mock.patch("app.tts.edge_tts", SimpleNamespace(Communicate=FakeComm)),
-            mock.patch("app.tts.config.VOICE_TTS", "edge"),
+            mock.patch("app.services.tts.edge_tts", SimpleNamespace(Communicate=FakeComm)),
+            mock.patch("app.services.tts.config.VOICE_TTS", "edge"),
             TestClient(app) as client,
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
@@ -233,11 +234,11 @@ class VoiceServerTests(unittest.TestCase):
                 raise ConnectionError("boom")
 
         with (
-            mock.patch("app.tts.edge_tts", SimpleNamespace(Communicate=FakeCommFail)),
-            mock.patch("app.tts.config.VOICE_TTS", "edge"),
+            mock.patch("app.services.tts.edge_tts", SimpleNamespace(Communicate=FakeCommFail)),
+            mock.patch("app.services.tts.config.VOICE_TTS", "edge"),
             # 本测试只关心"中途失败不重播"，禁用熔断避免开场白失败提前打开熔断
-            mock.patch("app.tts._circuit_open", return_value=False),
-            mock.patch("app.tts.TTS_MAX_CONCURRENCY", 1),  # 串行：保证断言确定
+            mock.patch("app.services.tts._circuit_open", return_value=False),
+            mock.patch("app.services.tts.TTS_MAX_CONCURRENCY", 1),  # 串行：保证断言确定
             TestClient(app) as client,
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
@@ -275,7 +276,7 @@ class VoiceServerTests(unittest.TestCase):
             return True
 
         with (
-            mock.patch("app.tts.synthesize", side_effect=fake_synth),
+            mock.patch("app.services.tts.synthesize", side_effect=fake_synth),
             TestClient(app) as client,
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
@@ -302,9 +303,9 @@ class VoiceServerTests(unittest.TestCase):
             return True
 
         with (
-            mock.patch("app.tts.synthesize", side_effect=fake_synth),
-            mock.patch("app.tts.TTS_FIRST_CHARS", 1),
-            mock.patch("app.tts.TTS_CHUNK_CHARS", 1),
+            mock.patch("app.services.tts.synthesize", side_effect=fake_synth),
+            mock.patch("app.services.tts.TTS_FIRST_CHARS", 1),
+            mock.patch("app.services.tts.TTS_CHUNK_CHARS", 1),
             TestClient(app) as client,
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
@@ -340,8 +341,8 @@ class VoiceServerTests(unittest.TestCase):
 
         async def run():
             with (
-                mock.patch("app.tts.edge_tts", SimpleNamespace(Communicate=FakeComm)),
-                mock.patch("app.tts.config.VOICE_TTS", "edge"),
+                mock.patch("app.services.tts.edge_tts", SimpleNamespace(Communicate=FakeComm)),
+                mock.patch("app.services.tts.config.VOICE_TTS", "edge"),
             ):
                 ws = FakeWS()
                 # 该连接熔断已打开
@@ -377,8 +378,8 @@ class VoiceServerTests(unittest.TestCase):
 
         ws = FakeWS()
         with (
-            mock.patch("app.tts.edge_tts", SimpleNamespace(Communicate=FakeComm)),
-            mock.patch("app.tts.config.VOICE_TTS", "edge"),
+            mock.patch("app.services.tts.edge_tts", SimpleNamespace(Communicate=FakeComm)),
+            mock.patch("app.services.tts.config.VOICE_TTS", "edge"),
         ):
             # 连接 A 熔断打开
             ok_a = asyncio.run(
@@ -401,9 +402,9 @@ class VoiceServerTests(unittest.TestCase):
         FAKE_AUDIO = b"\x00\x01\x02fake-cosy-audio"
 
         with (
-            mock.patch("app.tts.config.VOICE_TTS", "cosyvoice"),
-            mock.patch("app.tts.config.DASHSCOPE_API_KEY", "sk-test"),
-            mock.patch("app.tts._cosyvoice_synthesize", return_value=FAKE_AUDIO),
+            mock.patch("app.services.tts.config.VOICE_TTS", "cosyvoice"),
+            mock.patch("app.services.tts.config.DASHSCOPE_API_KEY", "sk-test"),
+            mock.patch("app.services.tts._cosyvoice_synthesize", return_value=FAKE_AUDIO),
             TestClient(app) as client,
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
@@ -447,10 +448,10 @@ class VoiceServerTests(unittest.TestCase):
 
         ws = FakeWS()
         with (
-            mock.patch("app.tts.config.VOICE_TTS", "cosyvoice"),
-            mock.patch("app.tts.config.DASHSCOPE_API_KEY", "sk-test"),
-            mock.patch("app.tts.edge_tts", None),  # 回退路径确定失败，才能测重试
-            mock.patch("app.tts._cosyvoice_synthesize", side_effect=flaky),
+            mock.patch("app.services.tts.config.VOICE_TTS", "cosyvoice"),
+            mock.patch("app.services.tts.config.DASHSCOPE_API_KEY", "sk-test"),
+            mock.patch("app.services.tts.edge_tts", None),  # 回退路径确定失败，才能测重试
+            mock.patch("app.services.tts._cosyvoice_synthesize", side_effect=flaky),
         ):
             ok = asyncio.run(_synthesize(ws, TtsState(), "你好"))
         self.assertFalse(ok)
@@ -460,10 +461,10 @@ class VoiceServerTests(unittest.TestCase):
         # 同一回复的下一段：直接走 edge-tts，不再尝试 CosyVoice
         ws2 = FakeWS()
         with (
-            mock.patch("app.tts.config.VOICE_TTS", "cosyvoice"),
-            mock.patch("app.tts.config.DASHSCOPE_API_KEY", "sk-test"),
-            mock.patch("app.tts.edge_tts", None),
-            mock.patch("app.tts._cosyvoice_synthesize", side_effect=flaky),
+            mock.patch("app.services.tts.config.VOICE_TTS", "cosyvoice"),
+            mock.patch("app.services.tts.config.DASHSCOPE_API_KEY", "sk-test"),
+            mock.patch("app.services.tts.edge_tts", None),
+            mock.patch("app.services.tts._cosyvoice_synthesize", side_effect=flaky),
         ):
             ok2 = asyncio.run(_synthesize(ws2, TtsState(voice="edge"), "第二句"))
         self.assertFalse(ok2)
@@ -483,7 +484,7 @@ class VoiceServerTests(unittest.TestCase):
 
         with (
             TestClient(app) as client,
-            mock.patch("app.tts.synthesize", side_effect=recording_synth),
+            mock.patch("app.services.tts.synthesize", side_effect=recording_synth),
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)
@@ -508,9 +509,9 @@ class VoiceServerTests(unittest.TestCase):
 
         ws = FakeWS()
         with (
-            mock.patch("app.tts.config.VOICE_TTS", "cosyvoice"),
-            mock.patch("app.tts.config.DASHSCOPE_API_KEY", ""),
-            mock.patch("app.tts._cosyvoice_synthesize", side_effect=never_called),
+            mock.patch("app.services.tts.config.VOICE_TTS", "cosyvoice"),
+            mock.patch("app.services.tts.config.DASHSCOPE_API_KEY", ""),
+            mock.patch("app.services.tts._cosyvoice_synthesize", side_effect=never_called),
         ):
             ok = asyncio.run(_synthesize(ws, TtsState(), "你好"))
         self.assertFalse(ok)
@@ -538,7 +539,7 @@ class VoiceServerTests(unittest.TestCase):
         with (
             mock.patch("app.agent.llm.chat_stream", side_effect=fake_stream),
             TestClient(app) as client,
-            mock.patch("app.tts.synthesize", side_effect=_fake_synth),
+            mock.patch("app.services.tts.synthesize", side_effect=_fake_synth),
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
             greeting_deltas, *_ = _recv_until_done(ws)
@@ -588,14 +589,14 @@ class VoiceServerTests(unittest.TestCase):
                 return self._json
 
         with (
-            mock.patch("app.tts.config.DASHSCOPE_API_KEY", "sk-test"),
+            mock.patch("app.services.tts.config.DASHSCOPE_API_KEY", "sk-test"),
             mock.patch(
-                "app.tts.requests.post",
+                "app.services.tts.requests.post",
                 return_value=FakeResp(
                     json_data={"output": {"audio": {"url": "http://audio.example/x.mp3"}}}
                 ),
             ),
-            mock.patch("app.tts.requests.get", return_value=FakeResp(content=b"MP3DATA")),
+            mock.patch("app.services.tts.requests.get", return_value=FakeResp(content=b"MP3DATA")),
         ):
             data = asyncio.run(_cosyvoice_synthesize("你好"))
         self.assertEqual(data, b"MP3DATA")
@@ -615,9 +616,9 @@ class VoiceServerTests(unittest.TestCase):
                 return self._json
 
         with (
-            mock.patch("app.tts.config.DASHSCOPE_API_KEY", "sk-test"),
+            mock.patch("app.services.tts.config.DASHSCOPE_API_KEY", "sk-test"),
             mock.patch(
-                "app.tts.requests.post",
+                "app.services.tts.requests.post",
                 return_value=FakeResp(
                     json_data={
                         "output": {
@@ -629,7 +630,7 @@ class VoiceServerTests(unittest.TestCase):
                     }
                 ),
             ),
-            mock.patch("app.tts.requests.get", side_effect=AssertionError("不应下载")),
+            mock.patch("app.services.tts.requests.get", side_effect=AssertionError("不应下载")),
         ):
             data = asyncio.run(_cosyvoice_synthesize("你好"))
         self.assertEqual(data, b"INLINE")
@@ -712,7 +713,7 @@ class VoiceServerTests(unittest.TestCase):
 
         with (
             TestClient(app) as client,
-            mock.patch("app.tts.synthesize", side_effect=_fake_synth),
+            mock.patch("app.services.tts.synthesize", side_effect=_fake_synth),
             mock.patch("app.voice_ws.DashScopeASR", FakeASR),
             mock.patch("app.voice_ws.ASR_RETRY_DELAY", 0.05),
             client.websocket_connect(self._ws_url(client)) as ws,
@@ -756,7 +757,7 @@ class VoiceServerTests(unittest.TestCase):
 
         with (
             TestClient(app) as client,
-            mock.patch("app.tts.synthesize", side_effect=_fake_synth),
+            mock.patch("app.services.tts.synthesize", side_effect=_fake_synth),
             mock.patch("app.voice_ws.DashScopeASR", FakeASR),
             mock.patch("app.voice_ws.ASR_RETRY_DELAY", 0.05),
             client.websocket_connect(self._ws_url(client)) as ws,
@@ -783,7 +784,7 @@ class VoiceServerTests(unittest.TestCase):
         with (
             TestClient(app) as client,
             mock.patch("app.agent.llm.chat_stream", side_effect=fake_stream),
-            mock.patch("app.tts.synthesize", side_effect=_fake_synth),
+            mock.patch("app.services.tts.synthesize", side_effect=_fake_synth),
         ):
             with client.websocket_connect(self._ws_url(client)) as ws:
                 greeting1, *_ = _recv_until_done(ws)
@@ -833,7 +834,7 @@ class VoiceServerTests(unittest.TestCase):
     @mock.patch("app.agent.coach.db.fts_search", return_value=[])
     def test_ws_text_rate_limited(self, mock_fts):
         """WS text 消息按用户限流：超限后返回结构化 rate_limit 错误，不再调用 LLM。"""
-        from app.ratelimit import reset_rate_limits
+        from app.core.ratelimit import reset_rate_limits
 
         calls = {"n": 0}
 
@@ -844,9 +845,9 @@ class VoiceServerTests(unittest.TestCase):
         with (
             TestClient(app) as client,
             mock.patch("app.agent.llm.chat_stream", side_effect=fake_stream),
-            mock.patch("app.tts.synthesize", side_effect=_fake_synth),
-            mock.patch("app.config.VOICE_TEXT_RATE_LIMIT", 2),
-            mock.patch("app.config.VOICE_TEXT_RATE_WINDOW", 60),
+            mock.patch("app.services.tts.synthesize", side_effect=_fake_synth),
+            mock.patch("app.core.config.VOICE_TEXT_RATE_LIMIT", 2),
+            mock.patch("app.core.config.VOICE_TEXT_RATE_WINDOW", 60),
         ):
             reset_rate_limits()
             with client.websocket_connect(self._ws_url(client)) as ws:
@@ -899,7 +900,7 @@ class VoiceServerTests(unittest.TestCase):
         with (
             TestClient(app) as client,
             mock.patch("app.agent.llm.chat_stream", side_effect=slow_stream),
-            mock.patch("app.tts.synthesize", side_effect=_fake_synth),
+            mock.patch("app.services.tts.synthesize", side_effect=_fake_synth),
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
             try:
@@ -949,9 +950,9 @@ class VoiceServerTests(unittest.TestCase):
 
         with (
             TestClient(app) as client,
-            mock.patch("app.tts.synthesize", side_effect=slow_first),
-            mock.patch("app.tts.TTS_FIRST_CHARS", 1),
-            mock.patch("app.tts.TTS_CHUNK_CHARS", 1),
+            mock.patch("app.services.tts.synthesize", side_effect=slow_first),
+            mock.patch("app.services.tts.TTS_FIRST_CHARS", 1),
+            mock.patch("app.services.tts.TTS_CHUNK_CHARS", 1),
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白

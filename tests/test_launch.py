@@ -29,7 +29,7 @@ class LaunchChecks(unittest.TestCase):
 
     def test_db_accessible(self):
         """数据库可正常读取（UI 侧边栏题库统计依赖）。"""
-        from app import db
+        from app.core import db
 
         try:
             db.init_db()  # 空环境（CI）下先建库

@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from bs4 import BeautifulSoup
 
-from app import config
+from app.core import config
 from app.crawler.base import SourceAdapter, make_session
 
 logger = logging.getLogger("interview_coach.crawler.mianshiya")
@@ -191,7 +191,7 @@ class MianShiYaAdapter(SourceAdapter):
 
     def after_store(self, rows: list[dict]) -> None:
         """入库后把抓到的答案/难度回写已存在的题目（详情补全）。"""
-        from app import db
+        from app.core import db
 
         for r in rows:
             if not (r.get("answer") or r.get("difficulty")):
