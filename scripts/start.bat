@@ -72,7 +72,7 @@ if not errorlevel 1 (
 )
 
 echo [4/6] 启动统一服务（文字版 + 语音通话 同一端口）...
-start "MianShiGuanXiaoP-Server" cmd /c "python -m uvicorn app.voice_server:app --host 127.0.0.1 --port !PORT!"
+start "MianShiGuanXiaoP-Server" cmd /c "python -m uvicorn app.main:app --host 127.0.0.1 --port !PORT!"
 
 echo [5/6] 等待服务就绪...
 timeout /t 5 /nobreak >nul

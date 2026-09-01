@@ -153,7 +153,7 @@ class CustomGenerateSseTests(unittest.TestCase):
 
     def test_custom_generate_sse_starts_session(self):
         """定制面试生成（SSE）→ 自动进入该定制模拟面试 + 语音定制按用户保存。"""
-        from app.voice_server import app
+        from app.main import app
         from fastapi.testclient import TestClient
 
         meta = {
@@ -191,7 +191,7 @@ class CustomGenerateSseTests(unittest.TestCase):
             self.assertEqual(st["job_title"], "Python 后端")
 
     def test_custom_generate_empty_input_rejected(self):
-        from app.voice_server import app
+        from app.main import app
         from fastapi.testclient import TestClient
 
         with TestClient(app) as client:

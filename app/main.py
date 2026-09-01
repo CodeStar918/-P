@@ -7,7 +7,7 @@
 - TTS 合成与推送（app/tts.py，引擎策略 + 熔断）。
 
 启动：
-    python -m uvicorn app.voice_server:app --host 127.0.0.1 --port 8765
+    python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 或安装后直接运行：
     xiaop-voice
 """
@@ -31,7 +31,7 @@ from app.routers import questions as questions_api
 from app.routers import session as session_api
 from app.voice_ws import router as voice_ws_router
 
-logger = logging.getLogger("voice_server")
+logger = logging.getLogger("interview_coach.main")
 
 
 @asynccontextmanager

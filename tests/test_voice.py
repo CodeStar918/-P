@@ -14,10 +14,10 @@ from unittest import mock
 from app.agent.coach import InterviewSession
 from app.core import config, db
 from app.core.ratelimit import reset_rate_limits
+from app.main import app, health
 from app.services.tts import TtsState, _cosyvoice_synthesize
 from app.services.tts import synthesize as _synthesize
 from app.stores import auth
-from app.voice_server import app, health
 from app.voice_ws import maybe_switch_to_mock
 from fastapi.testclient import TestClient
 from fastapi.websockets import WebSocketDisconnect

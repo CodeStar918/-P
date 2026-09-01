@@ -39,7 +39,7 @@ class RateLimitTests(unittest.TestCase):
         self.assertEqual(client.get("/x").status_code, 429)
 
     def test_auth_login_rate_limited(self):
-        from app.voice_server import app
+        from app.main import app
 
         tmpdir = tempfile.TemporaryDirectory()
         db_path = Path(tmpdir.name) / "test_ratelimit.db"

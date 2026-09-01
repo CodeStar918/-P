@@ -1,4 +1,4 @@
-"""TTS 合成与音频推送（从 voice_server 拆出）。
+"""TTS 合成与音频推送（从统一服务 main.py 拆出）。
 
 职责：文本清洗、句切分、TTS 引擎策略（CosyVoice / edge-tts）、
 连接级熔断、音频聚合推送（audio_start/audio/audio_end 三连帧）。

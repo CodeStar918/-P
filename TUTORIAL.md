@@ -147,7 +147,7 @@ cd frontend && npm install && npm run build && cd ..
 最后开一个终端启动统一服务：
 
 ```bash
-python -m uvicorn app.voice_server:app --host 127.0.0.1 --port 8765
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
 ---

@@ -17,7 +17,7 @@ ruff check .
 ruff format .
 
 # 启动统一服务（Vue3 前端 + REST + 语音，单端口 8765）
-python -m uvicorn app.voice_server:app --host 127.0.0.1 --port 8765
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 
 # 前端（Vue3 + Vite）——启动前需构建，产物供后端托管
 cd frontend
@@ -33,7 +33,7 @@ python -m app.crawler.run
 ## 目录约定
 
 - `app/`：应用包。
-  - `voice_server.py`：**统一 FastAPI 服务**——挂载 REST 路由、语音 WebSocket（按
+  - `main.py`：**统一 FastAPI 服务**——挂载 REST 路由、语音 WebSocket（按
     用户认证）、托管 `frontend/dist`（SPA history 回退）。
   - `voice_ws.py`：语音 WebSocket 协议处理（生命周期、互踢、ASR、回复生成）。
   - `routers/`：REST 路由层（`auth` 认证 / `session` 会话与 SSE 聊天 / `questions`

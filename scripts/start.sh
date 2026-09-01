@@ -32,7 +32,7 @@ fi
 PORT="${APP_PORT:-8765}"
 
 echo "[3/4] 启动服务（文字版 + 语音通话 同一端口 :$PORT）..."
-python3 -m uvicorn app.voice_server:app --host 127.0.0.1 --port "$PORT" &
+python3 -m uvicorn app.main:app --host 127.0.0.1 --port "$PORT" &
 SERVER_PID=$!
 trap "kill $SERVER_PID 2>/dev/null" EXIT
 

@@ -214,7 +214,7 @@ class ApiAndFlowTests(unittest.TestCase):
 
     def test_auth_required(self):
         """未登录访问受保护接口返回 401。"""
-        from app.voice_server import app
+        from app.main import app
         from fastapi.testclient import TestClient
 
         with TestClient(app) as client:
@@ -224,7 +224,7 @@ class ApiAndFlowTests(unittest.TestCase):
 
     def test_register_login_flow(self):
         """注册→自动登录→me→重复注册冲突→错误密码 401。"""
-        from app.voice_server import app
+        from app.main import app
         from fastapi.testclient import TestClient
 
         with TestClient(app) as client:
@@ -258,7 +258,7 @@ class ApiAndFlowTests(unittest.TestCase):
             tags=["Python基础"],
             difficulty="简单",
         )
-        from app.voice_server import app
+        from app.main import app
         from fastapi.testclient import TestClient
 
         with TestClient(app) as client:
@@ -305,7 +305,7 @@ class ApiAndFlowTests(unittest.TestCase):
             tags=["Python基础"],
             difficulty="简单",
         )
-        from app.voice_server import app
+        from app.main import app
         from fastapi.testclient import TestClient
 
         with TestClient(app) as client:
@@ -325,7 +325,7 @@ class ApiAndFlowTests(unittest.TestCase):
     def test_custom_status_and_start(self):
         """定制面试状态接口（按用户）与清空。"""
         import app.stores.voice_store as voice_store
-        from app.voice_server import app
+        from app.main import app
         from fastapi.testclient import TestClient
 
         with TestClient(app) as client:
