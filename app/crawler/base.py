@@ -42,7 +42,7 @@ class SourceAdapter(ABC):
 
     def fetch_and_store(self, limit: int | None = None) -> dict:
         """抓取并入库，返回统计 {'source', 'new', 'skipped', 'error'?}。"""
-        from app import db
+        from app.core import db
 
         rows = self.fetch(limit=limit)
         if not rows:

@@ -3,9 +3,9 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
-import app.db as db
-from app import auth
-from app.ratelimit import rate_limit
+import app.core.db as db
+from app.core.ratelimit import rate_limit
+from app.stores import auth
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 

@@ -8,9 +8,9 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-import app.db as db
-import app.importer as importer
-from app import auth
+import app.core.db as db
+import app.services.importer as importer
+from app.stores import auth
 
 router = APIRouter(prefix="/api", tags=["questions"])
 

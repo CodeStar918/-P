@@ -3,7 +3,7 @@
 import unittest
 from unittest import mock
 
-from app import importer
+from app.services import importer
 
 
 class ImporterTests(unittest.TestCase):
@@ -36,14 +36,14 @@ class ImporterTests(unittest.TestCase):
 
     def test_import_calls_upsert_many(self):
         with mock.patch(
-            "app.importer.db.upsert_many", return_value={"new": 2, "skipped": 1}
+            "app.services.importer.db.upsert_many", return_value={"new": 2, "skipped": 1}
         ) as mock_upsert:
             stats = importer.import_questions_csv("题目\nA\nB\nC")
         mock_upsert.assert_called_once()
         self.assertEqual(stats, {"new": 2, "skipped": 1, "rows": 3})
 
     def test_import_empty_no_db_call(self):
-        with mock.patch("app.importer.db.upsert_many") as mock_upsert:
+        with mock.patch("app.services.importer.db.upsert_many") as mock_upsert:
             stats = importer.import_questions_csv("")
         mock_upsert.assert_not_called()
         self.assertEqual(stats, {"new": 0, "skipped": 0, "rows": 0})

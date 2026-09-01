@@ -25,10 +25,20 @@
 
 ```
 智能面试/
-├── app/          # 后端：voice_server（统一服务）、routers、agent、crawler
-├── frontend/     # Vue3 前端工程（Vite + Element Plus）
+├── app/                  # 后端（统一 FastAPI 服务）
+│   ├── voice_server.py   # 入口：挂载 REST/WS，托管前端 dist
+│   ├── voice_ws.py       # 语音 WebSocket 协议处理
+│   ├── routers/          # REST 路由层：auth / session / questions / custom
+│   ├── agent/            # 领域层：会话状态机 + LLM 封装
+│   ├── crawler/          # 采集层：题库爬虫适配器
+│   ├── core/             # 基础设施：config / db / ratelimit / scheduler
+│   ├── services/         # 业务服务：tts / asr_client / prompts / importer
+│   ├── stores/           # 数据访问层：session / voice / auth 持久化
+│   └── ui/assets/        # 静态资源（虚拟人物头像，运行时 /assets 挂载源）
+├── frontend/     # Vue3 前端工程（Vite + Element Plus；public/assets 供构建期引用）
 ├── tests/        # 单元测试（数据层、爬虫、LLM、状态机、语音、多用户）
 ├── scripts/      # start.bat（Windows）/ start.sh（macOS·Linux）
+├── docs/         # 设计文档
 └── deploy/       # Dockerfile + docker-compose.yml
 ```
 

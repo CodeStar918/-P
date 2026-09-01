@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from app import config, db
 from app.agent import coach
 from app.agent.coach import InterviewSession
+from app.core import config, db
 
 FAKE_QUESTION = {
     "id": 1,

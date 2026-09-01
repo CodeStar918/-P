@@ -5,8 +5,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# 项目根目录（app/ 的上一级）
-BASE_DIR = Path(__file__).resolve().parent.parent
+# 项目根目录（config.py 位于 app/core/，向上两级为 app/，再上一级为项目根）
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # override=True：确保项目 .env 优先于系统环境变量（避免旧的环境变量遮蔽新密钥）
 load_dotenv(BASE_DIR / ".env", override=True)
 

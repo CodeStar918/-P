@@ -16,11 +16,12 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-import app.prompts as prompts
-import app.session_store as session_store
-from app import auth, config
+import app.services.prompts as prompts
+import app.stores.session_store as session_store
 from app.agent.coach import InterviewSession, parse_report
-from app.ratelimit import hit
+from app.core import config
+from app.core.ratelimit import hit
+from app.stores import auth
 
 logger = logging.getLogger("interview_coach.api.session")
 

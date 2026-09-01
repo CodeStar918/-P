@@ -3,8 +3,8 @@
 import unittest
 from unittest import mock
 
-from app import config
 from app.agent import llm
+from app.core import config
 
 
 def _fake_completion(text: str = "答案"):

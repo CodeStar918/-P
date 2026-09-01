@@ -14,7 +14,7 @@ import time
 
 import requests
 
-from app import config
+from app.core import config
 from app.crawler.base import SourceAdapter, make_session
 
 logger = logging.getLogger("interview_coach.crawler.leetcode")

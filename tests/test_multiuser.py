@@ -8,10 +8,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import app.db as db
-import app.session_store as session_store
-from app import auth, config
+import app.core.db as db
+import app.stores.session_store as session_store
 from app.agent.coach import InterviewSession
+from app.core import config
+from app.stores import auth
 
 
 def _fresh_db(testcase):

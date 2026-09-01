@@ -114,7 +114,7 @@ class MianShiYaTests(unittest.TestCase):
     def test_fetch_details_for_backfills(self, mock_get):
         """按 source_id 抓详情补答案：抓取 + 回写 db + 返回统计。"""
         ad = mianshiya.MianShiYaAdapter()
-        with mock.patch("app.db.update_question_details", return_value=1) as m_upd:
+        with mock.patch("app.core.db.update_question_details", return_value=1) as m_upd:
             stats = ad.fetch_details_for(["42"])
         self.assertEqual(stats, {"total": 1, "updated": 1})
         m_upd.assert_called_once()

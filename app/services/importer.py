@@ -4,7 +4,7 @@ import csv
 import io
 import re
 
-import app.db as db
+import app.core.db as db
 
 #: 表头别名（顺序即列含义）；无表头时按位置：题干,答案,标签,难度,公司
 _HEADER_ALIASES = {

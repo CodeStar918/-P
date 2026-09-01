@@ -25,7 +25,7 @@ except ImportError:  # 未安装 dashscope 时降级：仅 ASR 不可用，语�
     RecognitionCallback = object
     _DASHSCOPE_AVAILABLE = False
 
-from app import config
+from app.core import config
 
 logger = logging.getLogger("interview_coach.asr")
 

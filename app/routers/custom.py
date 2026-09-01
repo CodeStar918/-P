@@ -14,11 +14,11 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-import app.session_store as session_store
-import app.voice_store as voice_store
-from app import auth
+import app.stores.session_store as session_store
+import app.stores.voice_store as voice_store
 from app.agent.coach import InterviewSession
 from app.agent.customizer import generate_interview_questions_with_meta
+from app.stores import auth
 
 logger = logging.getLogger("interview_coach.api.custom")
 

@@ -21,14 +21,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-import app.db as db
-from app import config
+import app.core.db as db
 from app.agent import llm
+from app.core import config
+from app.core.scheduler import setup_logging
 from app.routers import auth as auth_api
 from app.routers import custom as custom_api
 from app.routers import questions as questions_api
 from app.routers import session as session_api
-from app.scheduler import setup_logging
 from app.voice_ws import router as voice_ws_router
 
 logger = logging.getLogger("voice_server")

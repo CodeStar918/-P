@@ -13,8 +13,8 @@ import json
 import logging
 import re
 
-from app import config, db
 from app.agent.llm import chat
+from app.core import config, db
 
 logger = logging.getLogger("interview_coach.crawler.classify")
 
