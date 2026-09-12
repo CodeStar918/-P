@@ -754,6 +754,11 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.services.tts.synth", side_effect=_fake_synth),
             mock.patch("app.voice_ws.DashScopeASR", FakeASR),
             mock.patch("app.voice_ws.ASR_RETRY_DELAY", 0.05),
+            # 必须显式声明"识别服务已配置"：未配置 Key 时服务端判定为配置类故障、
+            # 直接终态返回且不启动监督重连（bug #23），这些用例就会永远等不到
+            # asr_ready。不能依赖真实 DASHSCOPE_API_KEY——没有 .env 的 CI 环境
+            # 会让 ws.receive_text() 无限阻塞，把 job 挂到超时（曾挂满 6 小时）。
+            mock.patch("app.core.config.DASHSCOPE_API_KEY", "sk-test"),
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白
@@ -798,6 +803,11 @@ class VoiceServerTests(unittest.TestCase):
             mock.patch("app.services.tts.synth", side_effect=_fake_synth),
             mock.patch("app.voice_ws.DashScopeASR", FakeASR),
             mock.patch("app.voice_ws.ASR_RETRY_DELAY", 0.05),
+            # 必须显式声明"识别服务已配置"：未配置 Key 时服务端判定为配置类故障、
+            # 直接终态返回且不启动监督重连（bug #23），这些用例就会永远等不到
+            # asr_ready。不能依赖真实 DASHSCOPE_API_KEY——没有 .env 的 CI 环境
+            # 会让 ws.receive_text() 无限阻塞，把 job 挂到超时（曾挂满 6 小时）。
+            mock.patch("app.core.config.DASHSCOPE_API_KEY", "sk-test"),
             client.websocket_connect(self._ws_url(client)) as ws,
         ):
             _recv_until_done(ws)  # 消化开场白
