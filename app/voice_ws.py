@@ -414,27 +414,31 @@ async def _produce(ws: WebSocket, session: InterviewSession, text: str) -> None:
         tts_buf = ""
 
     async def _tts(chunk: str, slot: int) -> None:
-        """合成一段（约 2-3 句）：限制并发；在线失败后本回复剩余段直接降级本地语音。"""
+        """合成一段（约 2-3 句）并按序推送。
+
+        两个阶段的锁粒度必须分开（bug #12）：
+        - 合成受 sem 限流，**可并发**（CosyVoice 单段要 4-6 秒，串行会慢到不可用）；
+        - 推送受 _await_turn 顺序锁保护，保证 sid 分配顺序 == 音频内容顺序。
+        此前顺序锁套在合成之外，把合成本身也一起串行化了，sem 形同虚设。
+
+        降级开关 state.ok 在临界区内读取并置位：某段在线合成失败后，其余段
+        立即跳过在线合成改走本地语音，不必各自再等一次超时（并发后尤其重要，
+        否则同批进 sem 的几段会各自白等一次）。
+        """
         try:
+            chunk = tts.clean_tts_text(chunk)
+            if not chunk:
+                return
             async with sem:
-                chunk = tts.clean_tts_text(chunk)
-                if not chunk:
-                    return
-                await _await_turn(slot)
                 if state.ok:
-                    ok = await tts.synthesize(ws, state, chunk)
-                    if not ok:
+                    unit = await tts.synth(state, chunk)
+                    if not unit.ok:
                         state.ok = False
                 else:
-                    my_sid = state.sid + 1
-                    state.sid = my_sid
-                    await ws.send_text(
-                        json.dumps(
-                            {"type": "audio_start", "sid": my_sid, "text": chunk},
-                            ensure_ascii=False,
-                        )
-                    )
-                    await ws.send_text(json.dumps({"type": "tts_error", "sid": my_sid}))
+                    unit = tts.TtsUnit(chunk)
+            # 取得推送顺序权后再推：sid 必须按文本顺序分配
+            await _await_turn(slot)
+            await tts.push(ws, state, unit)
         except asyncio.CancelledError:
             raise
         finally:
@@ -510,7 +514,8 @@ async def _produce_greeting(ws: WebSocket, greeting: str) -> None:
             if not s.strip():
                 continue
             await ws.send_text(json.dumps({"type": "delta", "content": s}, ensure_ascii=False))
-        await tts.synthesize(ws, state, greeting.strip())
+        unit = await tts.synth(state, greeting.strip())
+        await tts.push(ws, state, unit)
         await ws.send_text(json.dumps({"type": "done"}))
     except asyncio.CancelledError:
         logger.info("开场白被用户打断")
